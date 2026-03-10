@@ -5,8 +5,12 @@ pluginManagement {
         gradlePluginPortal()
     }
 }
-dependencyResolution {
-    repositoryMode.set(RepositoryMode.PREFER_PROJECT)
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        google()
+        mavenCentral()
+    }
 }
 rootProject.name = "WordGuard"
 include ':app'

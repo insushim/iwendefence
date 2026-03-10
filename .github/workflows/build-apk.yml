@@ -1,0 +1,88 @@
+name: Build APK & Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (e.g., 1.0.0)'
+        required: true
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Make gradlew executable
+        run: chmod +x android/gradlew || true
+        working-directory: .
+
+      - name: Build APK
+        run: |
+          cd android
+          # Use gradle wrapper or direct gradle
+          if [ -f "gradlew" ]; then
+            ./gradlew assembleRelease
+          else
+            gradle assembleRelease
+          fi
+
+      - name: Get version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+            echo "tag=v${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "version=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+            echo "tag=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Rename APK
+        run: |
+          cp android/app/build/outputs/apk/release/app-release-unsigned.apk \
+             WordGuard-${{ steps.version.outputs.version }}.apk 2>/dev/null || \
+          cp android/app/build/outputs/apk/release/app-release.apk \
+             WordGuard-${{ steps.version.outputs.version }}.apk 2>/dev/null || \
+          cp android/app/build/outputs/apk/debug/app-debug.apk \
+             WordGuard-${{ steps.version.outputs.version }}.apk
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: "WordGuard ${{ steps.version.outputs.tag }}"
+          body: |
+            ## WordGuard ${{ steps.version.outputs.tag }}
+
+            ### 변경사항
+            - 자동 빌드된 APK 릴리스
+
+            ### 설치 방법
+            1. 아래 APK 파일을 다운로드합니다
+            2. Android 기기에서 설치합니다
+            3. "알 수 없는 앱" 설치를 허용해야 할 수 있습니다
+
+            ### iOS 사용자
+            - https://wordguard.pages.dev 에서 PWA로 설치 가능합니다
+            - Safari에서 "홈 화면에 추가"를 선택하세요
+          files: WordGuard-${{ steps.version.outputs.version }}.apk
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

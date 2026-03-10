@@ -1,0 +1,12 @@
+pluginManagement {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+dependencyResolution {
+    repositoryMode.set(RepositoryMode.PREFER_PROJECT)
+}
+rootProject.name = "WordGuard"
+include ':app'

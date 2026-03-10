@@ -15,6 +15,7 @@ import {
 import Link from 'next/link';
 import { useGameStore, usePlayerStore } from '@/shared/lib/store';
 import { useGameLoop } from '@/shared/hooks/useGameLoop';
+import { useQuizTrigger } from '@/shared/hooks/useQuizTrigger';
 import { getStage } from '@/shared/constants/stages';
 import { TOWER_DEFINITIONS } from '@/shared/constants/towers';
 import { TowerType, EnemyType, type GameSpeed, type Tower, type Wave, type WaveEnemy } from '@/shared/types/game';
@@ -88,6 +89,7 @@ export default function EndlessPage() {
     isPaused,
     isGameOver,
     combo,
+    quizCombo,
     setSpeed,
     togglePause,
     addTower,
@@ -104,6 +106,13 @@ export default function EndlessPage() {
   const [cellSize, setCellSize] = useState(60);
 
   const gameLoop = useGameLoop(canvasRef);
+
+  // ── Quiz auto-trigger system ──
+  const { triggerQuiz } = useQuizTrigger({
+    showQuiz,
+    setShowQuiz,
+    isTerminal: isGameOver || showGameOver,
+  });
 
   // Load stage on mount
   useEffect(() => {
@@ -332,19 +341,10 @@ export default function EndlessPage() {
     }
   }, [gameLoop]);
 
-  const handleQuizAnswer = useCallback(
-    (correct: boolean, reward: any) => {
-      setShowQuiz(false);
-      if (correct) {
-        useGameStore.getState().addGold(Math.round(50 * reward.goldMultiplier));
-      }
-      // Resume the game
-      if (useGameStore.getState().isPaused) {
-        togglePause();
-      }
-    },
-    [togglePause]
-  );
+  const handleManualQuiz = useCallback(() => {
+    if (!isPaused) togglePause();
+    setShowQuiz(true);
+  }, [isPaused, togglePause]);
 
   const handleRetry = useCallback(() => {
     reset();
@@ -409,6 +409,12 @@ export default function EndlessPage() {
           <Trophy className="w-3 h-3" />
           <span className="font-bold tabular-nums">{endlessHighScore.toLocaleString()}</span>
         </div>
+        {/* Quiz combo indicator */}
+        {quizCombo > 0 && (
+          <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-orange-500/20 border border-orange-500/30">
+            <span className="text-[10px] font-bold text-orange-300">{quizCombo} COMBO</span>
+          </div>
+        )}
       </div>
 
       {/* Game Canvas Area */}
@@ -469,10 +475,7 @@ export default function EndlessPage() {
 
           <motion.button
             whileTap={{ scale: 0.9 }}
-            onClick={() => {
-              if (!isPaused) togglePause();
-              setShowQuiz(true);
-            }}
+            onClick={handleManualQuiz}
             className="h-9 px-3 rounded-xl bg-indigo-600 flex items-center gap-1.5 text-sm text-white font-medium active:bg-indigo-500"
           >
             <BookOpen className="w-4 h-4" />
@@ -525,15 +528,7 @@ export default function EndlessPage() {
       {/* Word Quiz Modal */}
       <WordQuizModal
         isOpen={showQuiz}
-        quiz={useGameStore.getState().currentQuiz}
-        combo={combo}
-        onAnswer={handleQuizAnswer}
-        onClose={() => {
-          setShowQuiz(false);
-          if (useGameStore.getState().isPaused) {
-            togglePause();
-          }
-        }}
+        onClose={() => setShowQuiz(false)}
       />
 
       {/* Game Over Modal */}

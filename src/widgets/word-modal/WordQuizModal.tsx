@@ -1,57 +1,108 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Timer, Flame, Sparkles, X, Check, Volume2 } from 'lucide-react';
+import { Timer, Flame, Sparkles, X, Check, Heart, Zap, Coins, Shield } from 'lucide-react';
 import Modal from '@/shared/ui/Modal';
-import type { Quiz, QuizReward } from '@/shared/types/game';
+import { useWordStore, usePlayerStore, useGameStore } from '@/shared/lib/store';
+import { allWords } from '@/shared/constants/words';
+import type { Quiz, QuizReward, QuizType, WordData } from '@/shared/types/game';
+
+// ── Reward tiers based on combo ──
+function getComboReward(quizCombo: number): {
+  label: string;
+  gold: number;
+  attackBuff: number;
+  healAmount: number;
+} {
+  if (quizCombo >= 5) {
+    return { label: '+100 골드 & HP +3 회복', gold: 100, attackBuff: 0, healAmount: 3 };
+  }
+  if (quizCombo >= 3) {
+    return { label: '공격력 +30% 버프', gold: 50, attackBuff: 0.3, healAmount: 0 };
+  }
+  // Single correct
+  return { label: '+50 골드', gold: 50, attackBuff: 0, healAmount: 0 };
+}
 
 interface WordQuizModalProps {
   isOpen: boolean;
-  quiz: Quiz | null;
-  combo: number;
-  onAnswer: (correct: boolean, reward: QuizReward) => void;
   onClose: () => void;
 }
 
-export default function WordQuizModal({
-  isOpen,
-  quiz,
-  combo,
-  onAnswer,
-  onClose,
-}: WordQuizModalProps) {
+export default function WordQuizModal({ isOpen, onClose }: WordQuizModalProps) {
+  // ── Store state ──
+  const wordStats = usePlayerStore((s) => s.wordStats);
+  const updateWordStat = usePlayerStore((s) => s.updateWordStat);
+  const quizCombo = useGameStore((s) => s.quizCombo);
+
+  // ── Local state ──
+  const [quiz, setQuiz] = useState<Quiz | null>(null);
   const [timeLeft, setTimeLeft] = useState(10);
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
-  const [spellingInput, setSpellingInput] = useState('');
   const [result, setResult] = useState<'correct' | 'wrong' | null>(null);
   const [showReward, setShowReward] = useState(false);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [rewardInfo, setRewardInfo] = useState<ReturnType<typeof getComboReward> | null>(null);
+  const [startTime, setStartTime] = useState<number>(0);
 
-  // Reset state when quiz changes
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const closingRef = useRef(false);
+
+  // ── Generate quiz when modal opens ──
   useEffect(() => {
-    if (quiz && isOpen) {
-      setTimeLeft(quiz.timeLimit);
+    if (!isOpen) {
+      // Reset on close
+      closingRef.current = false;
+      return;
+    }
+
+    closingRef.current = false;
+
+    // Ensure words are loaded
+    const store = useWordStore.getState();
+    if (store.words.length === 0) {
+      store.setWords(allWords);
+    }
+
+    // Check if game store already has a quiz queued
+    const gameQuiz = useGameStore.getState().currentQuiz;
+    if (gameQuiz) {
+      setQuiz(gameQuiz);
+      setTimeLeft(gameQuiz.timeLimit);
       setSelectedOption(null);
-      setSpellingInput('');
       setResult(null);
       setShowReward(false);
-
-      if (quiz.type === 'spelling' && inputRef.current) {
-        setTimeout(() => inputRef.current?.focus(), 300);
-      }
+      setRewardInfo(null);
+      setStartTime(Date.now());
+      return;
     }
-  }, [quiz, isOpen]);
 
-  // Timer countdown
+    // Generate a fresh quiz
+    const types: QuizType[] = ['kr2en', 'en2kr'];
+    const quizType = types[Math.floor(Math.random() * types.length)];
+    const generated = store.generateQuiz(quizType, wordStats);
+
+    if (generated) {
+      setQuiz(generated);
+      setTimeLeft(generated.timeLimit);
+      setSelectedOption(null);
+      setResult(null);
+      setShowReward(false);
+      setRewardInfo(null);
+      setStartTime(Date.now());
+    }
+  }, [isOpen, wordStats]);
+
+  // ── Timer countdown ──
   useEffect(() => {
-    if (!isOpen || !quiz || result) return;
+    if (!isOpen || !quiz || result) {
+      if (timerRef.current) clearInterval(timerRef.current);
+      return;
+    }
 
     timerRef.current = setInterval(() => {
       setTimeLeft((prev) => {
         if (prev <= 1) {
-          // Time's up - wrong answer
           handleResult(false);
           return 0;
         }
@@ -62,27 +113,67 @@ export default function WordQuizModal({
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, quiz, result]);
 
+  // ── Handle result ──
   const handleResult = useCallback(
     (correct: boolean) => {
       if (timerRef.current) clearInterval(timerRef.current);
+      if (closingRef.current) return;
+
       setResult(correct ? 'correct' : 'wrong');
 
+      const responseTime = Date.now() - startTime;
+
+      if (quiz) {
+        // Update word stats in player store
+        updateWordStat(quiz.word.id, correct, responseTime);
+      }
+
       if (correct) {
+        // Increment combo first
+        useGameStore.getState().incrementCombo();
+        const newCombo = useGameStore.getState().quizCombo;
+        const reward = getComboReward(newCombo);
+        setRewardInfo(reward);
         setShowReward(true);
+
+        // Apply rewards
+        useGameStore.getState().addGold(reward.gold);
+
+        if (reward.healAmount > 0) {
+          useGameStore.getState().healHp(reward.healAmount);
+        }
+
+        if (reward.attackBuff > 0) {
+          // Apply attack buff to all towers
+          const state = useGameStore.getState();
+          for (const tower of state.towers) {
+            tower.stats.damage = Math.round(tower.stats.damage * (1 + reward.attackBuff));
+          }
+        }
+
+        // Add score
+        const comboMultiplier = 1 + newCombo * 0.1;
+        useGameStore.getState().setCombo(useGameStore.getState().combo);
+      } else {
+        // Reset quiz combo on wrong answer
+        useGameStore.setState({ quizCombo: 0 });
       }
 
       // Auto close after delay
       setTimeout(() => {
-        if (quiz) {
-          onAnswer(correct, quiz.reward);
-        }
-      }, correct ? 1500 : 1000);
+        if (closingRef.current) return;
+        closingRef.current = true;
+        handleClose();
+      }, correct ? 1800 : 1500);
     },
-    [quiz, onAnswer]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [quiz, startTime, updateWordStat]
   );
 
+  // ── Handle option click ──
   const handleOptionClick = useCallback(
     (option: string) => {
       if (result || !quiz) return;
@@ -97,33 +188,54 @@ export default function WordQuizModal({
     [result, quiz, handleResult]
   );
 
-  const handleSpellingSubmit = useCallback(() => {
-    if (result || !quiz) return;
+  // ── Handle close / dismiss ──
+  const handleClose = useCallback(() => {
+    if (timerRef.current) clearInterval(timerRef.current);
 
-    const correct =
-      spellingInput.trim().toLowerCase() === quiz.word.english.toLowerCase();
-    handleResult(correct);
-  }, [result, quiz, spellingInput, handleResult]);
+    // Clear quiz from game store
+    const gameState = useGameStore.getState();
+    if (gameState.currentQuiz) {
+      useGameStore.setState({ currentQuiz: null });
+    }
 
-  if (!quiz) return null;
+    // Resume game if paused
+    if (gameState.isPaused) {
+      gameState.togglePause();
+    }
 
-  const isEnglishAnswer = quiz.type === 'kr2en' || quiz.type === 'spelling';
-  const correctAnswer = isEnglishAnswer ? quiz.word.english : quiz.word.korean;
-  const timerPercent = (timeLeft / quiz.timeLimit) * 100;
+    setQuiz(null);
+    setResult(null);
+    setSelectedOption(null);
+    setShowReward(false);
+    setRewardInfo(null);
+    onClose();
+  }, [onClose]);
+
+  // ── Derived values ──
+  const isEnglishAnswer = quiz?.type === 'kr2en';
+  const correctAnswer = quiz ? (isEnglishAnswer ? quiz.word.english : quiz.word.korean) : '';
+  const timerPercent = quiz ? (timeLeft / quiz.timeLimit) * 100 : 100;
   const timerColor =
     timerPercent > 60 ? 'bg-emerald-500' : timerPercent > 30 ? 'bg-amber-500' : 'bg-red-500';
 
+  if (!quiz) return null;
+
   return (
     <Modal isOpen={isOpen} closeOnBackdrop={false} closeOnEscape={false}>
-      <div className="bg-slate-800 rounded-3xl w-[340px] overflow-hidden border border-slate-700 select-none">
-        {/* Header */}
+      <motion.div
+        initial={{ scale: 0.9, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        className="bg-slate-800 rounded-3xl w-[340px] overflow-hidden border border-slate-700 select-none relative"
+      >
+        {/* ── Header ── */}
         <div className="relative px-4 pt-4 pb-3">
           {/* Timer Bar */}
-          <div className="w-full h-2 rounded-full bg-slate-700 mb-3 overflow-hidden">
+          <div className="w-full h-2.5 rounded-full bg-slate-700 mb-3 overflow-hidden">
             <motion.div
               className={`h-full rounded-full ${timerColor}`}
+              initial={{ width: '100%' }}
               animate={{ width: `${timerPercent}%` }}
-              transition={{ duration: 0.3 }}
+              transition={{ duration: 0.5, ease: 'linear' }}
             />
           </div>
 
@@ -131,7 +243,7 @@ export default function WordQuizModal({
             {/* Timer */}
             <div className="flex items-center gap-1.5">
               <Timer
-                className={`w-4 h-4 ${timeLeft <= 3 ? 'text-red-400 animate-timer-pulse' : 'text-slate-400'}`}
+                className={`w-4 h-4 ${timeLeft <= 3 ? 'text-red-400' : 'text-slate-400'}`}
               />
               <span
                 className={`text-sm font-bold tabular-nums ${
@@ -140,140 +252,154 @@ export default function WordQuizModal({
               >
                 {timeLeft}s
               </span>
+              {timeLeft <= 3 && (
+                <motion.span
+                  animate={{ scale: [1, 1.3, 1] }}
+                  transition={{ repeat: Infinity, duration: 0.5 }}
+                  className="text-red-400 text-xs"
+                >
+                  !
+                </motion.span>
+              )}
             </div>
 
-            {/* Combo */}
-            {combo > 0 && (
-              <div className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-orange-500/20 border border-orange-500/30">
+            {/* Combo display */}
+            {quizCombo > 0 && (
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-orange-500/20 border border-orange-500/30"
+              >
                 <Flame className="w-3.5 h-3.5 text-orange-400" />
-                <span className="text-xs font-bold text-orange-300">{combo}</span>
-              </div>
+                <span className="text-xs font-bold text-orange-300">
+                  {quizCombo} COMBO
+                </span>
+              </motion.div>
             )}
 
             {/* Quiz type label */}
-            <span className="text-xs text-slate-500 font-medium">
-              {quiz.type === 'kr2en'
-                ? '한→영'
-                : quiz.type === 'en2kr'
-                  ? '영→한'
-                  : quiz.type === 'spelling'
-                    ? '스펠링'
-                    : quiz.type === 'listening'
-                      ? '듣기'
-                      : quiz.type === 'sentence'
-                        ? '문장'
-                        : '퀴즈'}
+            <span className="text-xs text-slate-500 font-medium px-2 py-0.5 rounded-full bg-slate-700/50">
+              {quiz.type === 'kr2en' ? '한 → 영' : '영 → 한'}
             </span>
           </div>
         </div>
 
-        {/* Question */}
-        <div className="px-4 py-6 text-center bg-slate-900/50">
+        {/* ── Question ── */}
+        <div className="px-4 py-8 text-center bg-gradient-to-b from-slate-900/80 to-slate-900/40">
           {quiz.type === 'kr2en' ? (
             <>
-              <p className="text-sm text-slate-500 mb-2">이 뜻에 맞는 영단어는?</p>
-              <p className="text-2xl font-bold text-white">{quiz.word.korean}</p>
-            </>
-          ) : quiz.type === 'en2kr' ? (
-            <>
-              <p className="text-sm text-slate-500 mb-2">이 단어의 뜻은?</p>
-              <p className="text-2xl font-bold text-white">{quiz.word.english}</p>
-              <p className="text-xs text-slate-500 mt-1">{quiz.word.phonetic}</p>
-            </>
-          ) : quiz.type === 'spelling' ? (
-            <>
-              <p className="text-sm text-slate-500 mb-2">스펠링을 입력하세요</p>
-              <p className="text-2xl font-bold text-white">{quiz.word.korean}</p>
-            </>
-          ) : quiz.type === 'listening' ? (
-            <>
-              <p className="text-sm text-slate-500 mb-2">들은 단어를 고르세요</p>
-              <button className="w-16 h-16 rounded-full bg-indigo-600 flex items-center justify-center mx-auto hover:bg-indigo-500 transition-colors">
-                <Volume2 className="w-8 h-8 text-white" />
-              </button>
-            </>
-          ) : (
-            <>
-              <p className="text-sm text-slate-500 mb-2">다음 문장을 완성하세요</p>
-              <p className="text-lg font-medium text-white">
-                {quiz.word.exampleSentence?.replace(
-                  quiz.word.english,
-                  '______'
-                ) || `I like ______.`}
-              </p>
-            </>
-          )}
-        </div>
-
-        {/* Answer Area */}
-        <div className="p-4">
-          {quiz.type === 'spelling' ? (
-            /* Spelling Input */
-            <div className="space-y-3">
-              <input
-                ref={inputRef}
-                type="text"
-                value={spellingInput}
-                onChange={(e) => setSpellingInput(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleSpellingSubmit()}
-                disabled={result !== null}
-                placeholder="영어 단어를 입력하세요"
-                className="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-600 text-white text-center text-lg font-medium placeholder-slate-600 focus:outline-none focus:border-indigo-500 disabled:opacity-50"
-                autoComplete="off"
-                autoCapitalize="off"
-              />
-              <motion.button
-                whileTap={{ scale: 0.95 }}
-                onClick={handleSpellingSubmit}
-                disabled={result !== null || !spellingInput.trim()}
-                className="w-full py-3 rounded-xl bg-indigo-600 text-white font-bold text-base disabled:opacity-50 disabled:cursor-not-allowed hover:bg-indigo-500 transition-colors"
+              <p className="text-sm text-slate-500 mb-3">이 뜻에 맞는 영단어는?</p>
+              <motion.p
+                initial={{ y: 10, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{ delay: 0.1 }}
+                className="text-3xl font-black text-white tracking-wide"
               >
-                확인
-              </motion.button>
-            </div>
+                {quiz.word.korean}
+              </motion.p>
+              {quiz.word.partOfSpeech && (
+                <p className="text-xs text-slate-600 mt-2 italic">
+                  ({quiz.word.partOfSpeech})
+                </p>
+              )}
+            </>
           ) : (
-            /* Multiple Choice */
-            <div className="grid grid-cols-2 gap-2">
-              {quiz.options.map((option, idx) => {
-                const isSelected = selectedOption === option;
-                const isCorrect = option === correctAnswer;
-                const showCorrect = result && isCorrect;
-                const showWrong = result && isSelected && !isCorrect;
-
-                return (
-                  <motion.button
-                    key={idx}
-                    whileTap={!result ? { scale: 0.95 } : {}}
-                    onClick={() => handleOptionClick(option)}
-                    disabled={result !== null}
-                    className={`
-                      py-3 px-3 rounded-xl text-sm font-medium
-                      transition-all duration-200 text-left
-                      ${
-                        showCorrect
-                          ? 'bg-emerald-600 text-white border-2 border-emerald-400 shadow-lg shadow-emerald-500/30'
-                          : showWrong
-                            ? 'bg-red-600 text-white border-2 border-red-400 animate-shake'
-                            : isSelected
-                              ? 'bg-indigo-600 text-white border-2 border-indigo-400'
-                              : 'bg-slate-700/50 text-slate-300 border-2 border-transparent hover:bg-slate-700 hover:border-slate-600'
-                      }
-                      disabled:cursor-not-allowed
-                    `}
-                  >
-                    <span className="inline-flex items-center gap-1.5">
-                      {showCorrect && <Check className="w-4 h-4" />}
-                      {showWrong && <X className="w-4 h-4" />}
-                      {option}
-                    </span>
-                  </motion.button>
-                );
-              })}
-            </div>
+            <>
+              <p className="text-sm text-slate-500 mb-3">이 단어의 뜻은?</p>
+              <motion.p
+                initial={{ y: 10, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{ delay: 0.1 }}
+                className="text-3xl font-black text-white tracking-wide"
+              >
+                {quiz.word.english}
+              </motion.p>
+              {quiz.word.phonetic && (
+                <p className="text-xs text-indigo-400/70 mt-2">{quiz.word.phonetic}</p>
+              )}
+            </>
           )}
         </div>
 
-        {/* Result Overlay */}
+        {/* ── Answer Buttons (2x2 grid) ── */}
+        <div className="p-4">
+          <div className="grid grid-cols-2 gap-2.5">
+            {quiz.options.map((option, idx) => {
+              const isSelected = selectedOption === option;
+              const isCorrect = option === correctAnswer;
+              const showCorrect = result && isCorrect;
+              const showWrong = result && isSelected && !isCorrect;
+
+              return (
+                <motion.button
+                  key={`${option}-${idx}`}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.05 * idx }}
+                  whileTap={!result ? { scale: 0.93 } : {}}
+                  onClick={() => handleOptionClick(option)}
+                  disabled={result !== null}
+                  className={`
+                    relative py-3.5 px-3 rounded-xl text-sm font-semibold
+                    transition-all duration-200 text-center leading-snug
+                    min-h-[52px] flex items-center justify-center
+                    ${
+                      showCorrect
+                        ? 'bg-emerald-600 text-white border-2 border-emerald-400 shadow-lg shadow-emerald-500/40'
+                        : showWrong
+                          ? 'bg-red-600/90 text-white border-2 border-red-400 shadow-lg shadow-red-500/30'
+                          : result && !isSelected
+                            ? 'bg-slate-700/30 text-slate-500 border-2 border-transparent'
+                            : 'bg-slate-700/60 text-slate-200 border-2 border-slate-600/50 hover:bg-slate-600/80 hover:border-indigo-500/50 active:bg-indigo-700/50'
+                    }
+                    disabled:cursor-not-allowed
+                  `}
+                >
+                  {showCorrect && (
+                    <motion.span
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      className="mr-1.5"
+                    >
+                      <Check className="w-4 h-4 inline" />
+                    </motion.span>
+                  )}
+                  {showWrong && (
+                    <motion.span
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      className="mr-1.5"
+                    >
+                      <X className="w-4 h-4 inline" />
+                    </motion.span>
+                  )}
+                  {option}
+
+                  {/* Correct answer glow animation */}
+                  {showCorrect && (
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: [0, 0.5, 0] }}
+                      transition={{ duration: 1, repeat: Infinity }}
+                      className="absolute inset-0 rounded-xl bg-emerald-400/20"
+                    />
+                  )}
+
+                  {/* Wrong answer shake */}
+                  {showWrong && (
+                    <motion.div
+                      animate={{ x: [0, -4, 4, -4, 4, 0] }}
+                      transition={{ duration: 0.4 }}
+                      className="absolute inset-0"
+                    />
+                  )}
+                </motion.button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* ── Result Overlay ── */}
         <AnimatePresence>
           {result && (
             <motion.div
@@ -283,38 +409,168 @@ export default function WordQuizModal({
               className="px-4 pb-4"
             >
               {result === 'correct' ? (
-                <div className="text-center py-3 rounded-xl bg-emerald-600/20 border border-emerald-500/30">
+                <div className="text-center py-4 rounded-2xl bg-gradient-to-r from-emerald-600/20 via-emerald-500/20 to-emerald-600/20 border border-emerald-500/30 relative overflow-hidden">
+                  {/* Sparkle particles */}
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ type: 'spring', stiffness: 400, damping: 10 }}
+                    className="inline-flex items-center gap-2 mb-2"
+                  >
+                    <Sparkles className="w-5 h-5 text-amber-400" />
+                    <span className="font-black text-lg text-emerald-300">정답!</span>
+                    <Sparkles className="w-5 h-5 text-amber-400" />
+                  </motion.div>
+
+                  {/* Reward display */}
+                  {showReward && rewardInfo && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 5 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.2 }}
+                      className="space-y-1.5 mt-1"
+                    >
+                      <div className="flex items-center justify-center gap-1.5">
+                        <Coins className="w-4 h-4 text-amber-400" />
+                        <span className="text-sm font-bold text-amber-300">
+                          +{rewardInfo.gold} 골드
+                        </span>
+                      </div>
+
+                      {rewardInfo.attackBuff > 0 && (
+                        <motion.div
+                          initial={{ opacity: 0, scale: 0.8 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          transition={{ delay: 0.3 }}
+                          className="flex items-center justify-center gap-1.5"
+                        >
+                          <Zap className="w-4 h-4 text-red-400" />
+                          <span className="text-sm font-bold text-red-300">
+                            공격력 +{Math.round(rewardInfo.attackBuff * 100)}%
+                          </span>
+                        </motion.div>
+                      )}
+
+                      {rewardInfo.healAmount > 0 && (
+                        <motion.div
+                          initial={{ opacity: 0, scale: 0.8 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          transition={{ delay: 0.4 }}
+                          className="flex items-center justify-center gap-1.5"
+                        >
+                          <Heart className="w-4 h-4 text-pink-400" />
+                          <span className="text-sm font-bold text-pink-300">
+                            HP +{rewardInfo.healAmount} 회복
+                          </span>
+                        </motion.div>
+                      )}
+
+                      {/* Combo milestone indicator */}
+                      {quizCombo >= 3 && (
+                        <motion.div
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          transition={{ delay: 0.5 }}
+                          className="pt-1"
+                        >
+                          <span className="text-xs text-orange-400/80 font-medium">
+                            {quizCombo >= 5
+                              ? '5 COMBO 보너스!'
+                              : '3 COMBO 보너스!'}
+                          </span>
+                        </motion.div>
+                      )}
+                    </motion.div>
+                  )}
+
+                  {/* Floating particles */}
+                  {[...Array(6)].map((_, i) => (
+                    <motion.div
+                      key={i}
+                      initial={{
+                        opacity: 0.8,
+                        y: 0,
+                        x: (Math.random() - 0.5) * 40,
+                        scale: 0.5 + Math.random() * 0.5,
+                      }}
+                      animate={{
+                        opacity: 0,
+                        y: -40 - Math.random() * 30,
+                        scale: 0,
+                      }}
+                      transition={{
+                        duration: 1 + Math.random() * 0.5,
+                        delay: Math.random() * 0.3,
+                      }}
+                      className="absolute text-amber-400 pointer-events-none"
+                      style={{
+                        left: `${20 + Math.random() * 60}%`,
+                        bottom: '20%',
+                        fontSize: '10px',
+                      }}
+                    >
+                      *
+                    </motion.div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-4 rounded-2xl bg-gradient-to-r from-red-600/15 via-red-500/15 to-red-600/15 border border-red-500/25">
                   <motion.div
                     initial={{ scale: 0 }}
                     animate={{ scale: 1 }}
                     transition={{ type: 'spring', stiffness: 400 }}
-                    className="inline-flex items-center gap-2"
                   >
-                    <Sparkles className="w-5 h-5 text-emerald-400" />
-                    <span className="font-bold text-emerald-300">정답!</span>
+                    <p className="font-bold text-red-300 text-lg mb-1">아쉬워요!</p>
                   </motion.div>
-                  {showReward && (
-                    <motion.p
-                      initial={{ opacity: 0, y: 5 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="text-xs text-emerald-400/80 mt-1"
-                    >
-                      +{Math.round(50 * quiz.reward.goldMultiplier)} 골드
-                    </motion.p>
-                  )}
-                </div>
-              ) : (
-                <div className="text-center py-3 rounded-xl bg-red-600/20 border border-red-500/30">
-                  <p className="font-bold text-red-300">틀렸어요!</p>
-                  <p className="text-xs text-red-400/80 mt-1">
-                    정답: <span className="font-bold text-white">{correctAnswer}</span>
+                  <p className="text-sm text-slate-400 mb-2">
+                    정답:{' '}
+                    <span className="font-bold text-white text-base">{correctAnswer}</span>
                   </p>
+                  <motion.p
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.3 }}
+                    className="text-xs text-indigo-400/80 font-medium"
+                  >
+                    다시 도전!
+                  </motion.p>
                 </div>
               )}
             </motion.div>
           )}
         </AnimatePresence>
-      </div>
+
+        {/* ── Skip / Dismiss button ── */}
+        {!result && (
+          <div className="px-4 pb-3">
+            <button
+              onClick={handleClose}
+              className="w-full py-2 text-xs text-slate-500 hover:text-slate-400 transition-colors font-medium"
+            >
+              건너뛰기
+            </button>
+          </div>
+        )}
+
+        {/* ── Next reward preview ── */}
+        {!result && quizCombo > 0 && quizCombo < 5 && (
+          <div className="px-4 pb-3">
+            <div className="text-center text-[10px] text-slate-600">
+              {quizCombo < 3 ? (
+                <span>
+                  {3 - quizCombo}문제 더 맞히면{' '}
+                  <span className="text-red-400/70">공격력 +30%</span>
+                </span>
+              ) : (
+                <span>
+                  {5 - quizCombo}문제 더 맞히면{' '}
+                  <span className="text-pink-400/70">HP 회복 + 100골드</span>
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+      </motion.div>
     </Modal>
   );
 }

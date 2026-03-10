@@ -14,6 +14,7 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useGameStore, usePlayerStore } from '@/shared/lib/store';
 import { useGameLoop } from '@/shared/hooks/useGameLoop';
+import { useQuizTrigger } from '@/shared/hooks/useQuizTrigger';
 import { getStage } from '@/shared/constants/stages';
 import { TOWER_DEFINITIONS } from '@/shared/constants/towers';
 import { TowerType, type GameSpeed, type Tower, type WorldId, type StageId } from '@/shared/types/game';
@@ -46,6 +47,7 @@ function PlayPageContent() {
     isPaused,
     isGameOver,
     combo,
+    quizCombo,
     setSpeed,
     togglePause,
     addTower,
@@ -63,6 +65,13 @@ function PlayPageContent() {
   const [totalWaves, setTotalWaves] = useState(0);
 
   const gameLoop = useGameLoop(canvasRef);
+
+  // ── Quiz auto-trigger system ──
+  const { triggerQuiz } = useQuizTrigger({
+    showQuiz,
+    setShowQuiz,
+    isTerminal: isGameOver || showGameOver || showStageClear,
+  });
 
   // Load stage on mount
   useEffect(() => {
@@ -284,18 +293,10 @@ function PlayPageContent() {
     gameLoop.startNextWave();
   }, [gameLoop]);
 
-  const handleQuizAnswer = useCallback(
-    (correct: boolean, reward: any) => {
-      setShowQuiz(false);
-      if (correct) {
-        useGameStore.getState().addGold(Math.round(50 * reward.goldMultiplier));
-      }
-      if (useGameStore.getState().isPaused) {
-        togglePause();
-      }
-    },
-    [togglePause]
-  );
+  const handleManualQuiz = useCallback(() => {
+    if (!isPaused) togglePause();
+    setShowQuiz(true);
+  }, [isPaused, togglePause]);
 
   const handleRetry = useCallback(() => {
     reset();
@@ -356,6 +357,12 @@ function PlayPageContent() {
         <div className="text-xs text-slate-400">
           웨이브 {wave}/{totalWaves}
         </div>
+        {/* Quiz combo indicator */}
+        {quizCombo > 0 && (
+          <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-orange-500/20 border border-orange-500/30">
+            <span className="text-[10px] font-bold text-orange-300">{quizCombo} COMBO</span>
+          </div>
+        )}
       </div>
 
       {/* Game Canvas Area */}
@@ -416,10 +423,7 @@ function PlayPageContent() {
 
           <motion.button
             whileTap={{ scale: 0.9 }}
-            onClick={() => {
-              if (!isPaused) togglePause();
-              setShowQuiz(true);
-            }}
+            onClick={handleManualQuiz}
             className="h-9 px-3 rounded-xl bg-indigo-600 flex items-center gap-1.5 text-sm text-white font-medium active:bg-indigo-500"
           >
             <BookOpen className="w-4 h-4" />
@@ -472,15 +476,7 @@ function PlayPageContent() {
       {/* Word Quiz Modal */}
       <WordQuizModal
         isOpen={showQuiz}
-        quiz={useGameStore.getState().currentQuiz}
-        combo={combo}
-        onAnswer={handleQuizAnswer}
-        onClose={() => {
-          setShowQuiz(false);
-          if (useGameStore.getState().isPaused) {
-            togglePause();
-          }
-        }}
+        onClose={() => setShowQuiz(false)}
       />
 
       {/* Stage Clear Modal */}

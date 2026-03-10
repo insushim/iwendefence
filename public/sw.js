@@ -29,11 +29,14 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
+  // Only handle GET requests - HEAD and other methods are unsupported for caching
+  if (event.request.method !== 'GET') return;
+
   event.respondWith(
     caches.match(event.request).then((response) => {
       if (response) return response;
       return fetch(event.request).then((fetchResponse) => {
-        if (!fetchResponse || fetchResponse.status !== 200 || fetchResponse.type !== 'basic') {
+        if (!fetchResponse || fetchResponse.status !== 200) {
           return fetchResponse;
         }
         const responseToCache = fetchResponse.clone();
@@ -41,7 +44,7 @@ self.addEventListener('fetch', (event) => {
           cache.put(event.request, responseToCache);
         });
         return fetchResponse;
-      });
+      }).catch(() => response);
     })
   );
 });

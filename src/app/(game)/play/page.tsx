@@ -1,27 +1,24 @@
 'use client';
 
-import React, { useState, useCallback, Suspense } from 'react';
+import React, { useRef, useEffect, useState, useCallback, Suspense } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Pause,
   Play,
   FastForward,
-  Zap,
-  Merge,
   BookOpen,
   ArrowLeft,
-  Heart,
-  Coins,
-  Diamond,
-  Waves,
-  Target,
+  Swords,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { useGameStore } from '@/shared/lib/store';
+import { useGameStore, usePlayerStore } from '@/shared/lib/store';
+import { useGameLoop } from '@/shared/hooks/useGameLoop';
+import { getStage } from '@/shared/constants/stages';
 import { TOWER_DEFINITIONS } from '@/shared/constants/towers';
-import { TowerType, type GameSpeed } from '@/shared/types/game';
+import { TowerType, type GameSpeed, type Tower, type WorldId, type StageId } from '@/shared/types/game';
 import GameHUD from '@/widgets/hud/GameHUD';
+import WordQuizModal from '@/widgets/word-modal/WordQuizModal';
 import Button from '@/shared/ui/Button';
 import Modal from '@/shared/ui/Modal';
 
@@ -29,8 +26,13 @@ const towerList = Object.values(TOWER_DEFINITIONS);
 
 function PlayPageContent() {
   const searchParams = useSearchParams();
-  const worldId = searchParams.get('world') || '1';
-  const stageId = searchParams.get('stage') || '1';
+  const worldId = (parseInt(searchParams.get('world') || '1', 10) || 1) as WorldId;
+  const stageId = (parseInt(searchParams.get('stage') || '1', 10) || 1) as StageId;
+
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const waveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const stageLoadedRef = useRef(false);
 
   const {
     gold,
@@ -50,14 +52,150 @@ function PlayPageContent() {
     reset,
   } = useGameStore();
 
+  const setHighScore = usePlayerStore((s) => s.setHighScore);
+  const unlockStage = usePlayerStore((s) => s.unlockStage);
+
   const [selectedTower, setSelectedTower] = useState<TowerType | null>(null);
   const [showGameOver, setShowGameOver] = useState(false);
+  const [showStageClear, setShowStageClear] = useState(false);
   const [showQuiz, setShowQuiz] = useState(false);
+  const [cellSize, setCellSize] = useState(60);
+  const [totalWaves, setTotalWaves] = useState(0);
 
-  // Watch for game over
-  React.useEffect(() => {
-    if (isGameOver) setShowGameOver(true);
-  }, [isGameOver]);
+  const gameLoop = useGameLoop(canvasRef);
+
+  // Load stage on mount
+  useEffect(() => {
+    if (stageLoadedRef.current) return;
+    stageLoadedRef.current = true;
+
+    // Reset game state
+    reset();
+
+    const stage = getStage(worldId, stageId);
+    setTotalWaves(stage.waves.length);
+
+    const updateCanvasSize = () => {
+      const container = containerRef.current;
+      const canvas = canvasRef.current;
+      if (!container || !canvas) return;
+
+      const rect = container.getBoundingClientRect();
+      const cols = 12;
+      const rows = 8;
+
+      const cs = Math.floor(Math.min(rect.width / cols, rect.height / rows));
+      setCellSize(cs);
+
+      canvas.width = cols * cs;
+      canvas.height = rows * cs;
+      canvas.style.width = `${cols * cs}px`;
+      canvas.style.height = `${rows * cs}px`;
+
+      return cs;
+    };
+
+    const cs = updateCanvasSize();
+    if (!cs) return;
+
+    gameLoop.loadStage(stage.mapData, stage.waves, cs);
+
+    const engine = gameLoop.getEngine();
+    if (engine && canvasRef.current) {
+      engine.setCanvas(canvasRef.current, cs);
+    }
+
+    gameLoop.start();
+
+    // Auto-start first wave after 3 seconds
+    waveTimerRef.current = setTimeout(() => {
+      gameLoop.startNextWave();
+    }, 3000);
+
+    // Handle resize
+    const resizeObserver = new ResizeObserver(() => {
+      const newCs = updateCanvasSize();
+      if (newCs) {
+        const eng = gameLoop.getEngine();
+        if (eng && canvasRef.current) {
+          eng.setCanvas(canvasRef.current, newCs);
+        }
+      }
+    });
+
+    if (containerRef.current) {
+      resizeObserver.observe(containerRef.current);
+    }
+
+    return () => {
+      resizeObserver.disconnect();
+      if (waveTimerRef.current) clearTimeout(waveTimerRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Sync towers to engine
+  useEffect(() => {
+    gameLoop.syncTowers(towers);
+  }, [towers, gameLoop]);
+
+  // Watch for wave completion -> auto-start next wave (for stage mode)
+  useEffect(() => {
+    const engine = gameLoop.getEngine();
+    if (!engine || isGameOver) return;
+
+    const checkInterval = setInterval(() => {
+      if (engine.isAllWavesDone() && !engine.getIsGameOver()) {
+        // All waves cleared!
+        clearInterval(checkInterval);
+        setShowStageClear(true);
+
+        // Save progress
+        setHighScore(worldId, stageId, score);
+        // Unlock next stage
+        const nextStageId = stageId < 10 ? ((stageId + 1) as StageId) : stageId;
+        const nextWorldId = stageId >= 10 && worldId < 10 ? ((worldId + 1) as WorldId) : worldId;
+        if (stageId < 10) {
+          unlockStage(worldId, nextStageId);
+        } else if (worldId < 10) {
+          unlockStage(nextWorldId, 1 as StageId);
+        }
+        return;
+      }
+
+      if (!engine.isWaveActive() && engine.getCurrentWave() >= 0 && !engine.getIsGameOver() && !engine.isAllWavesDone()) {
+        // Wave ended, start next after delay
+        if (waveTimerRef.current) clearTimeout(waveTimerRef.current);
+        waveTimerRef.current = setTimeout(() => {
+          gameLoop.startNextWave();
+        }, 5000);
+        clearInterval(checkInterval);
+      }
+    }, 500);
+
+    return () => clearInterval(checkInterval);
+  }, [wave, gameLoop, isGameOver, worldId, stageId, score, setHighScore, unlockStage]);
+
+  // Game over handling
+  useEffect(() => {
+    if (isGameOver && !showStageClear) {
+      setShowGameOver(true);
+    }
+  }, [isGameOver, showStageClear]);
+
+  // Sync pause state to engine
+  useEffect(() => {
+    if (isPaused) {
+      gameLoop.pause();
+    } else {
+      gameLoop.resume();
+    }
+  }, [isPaused, gameLoop]);
+
+  // Sync speed to engine
+  useEffect(() => {
+    gameLoop.setSpeed(speed);
+  }, [speed, gameLoop]);
 
   const handleSpeedToggle = useCallback(() => {
     const speeds: GameSpeed[] = [1, 2, 3];
@@ -69,27 +207,133 @@ function PlayPageContent() {
     setSelectedTower((prev) => (prev === type ? null : type));
   }, []);
 
-  const handleGridTap = useCallback(
-    (row: number, col: number) => {
-      if (!selectedTower) return;
-      const def = TOWER_DEFINITIONS[selectedTower];
-      if (gold < def.cost) return;
+  const handleCanvasTap = useCallback(
+    (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+      const canvas = canvasRef.current;
+      const engine = gameLoop.getEngine();
+      if (!canvas || !engine) return;
 
-      addTower({
-        id: `tower-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-        type: selectedTower,
-        grade: 1,
-        position: { row, col },
-        stats: { ...def.baseStats },
-        level: 1,
-        mergeCount: 0,
-        targetingMode: 'first',
-      });
-      useGameStore.getState().addGold(-def.cost);
-      setSelectedTower(null);
+      const mapData = engine.getMapData();
+      if (!mapData) return;
+
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+
+      let clientX: number, clientY: number;
+      if ('touches' in e) {
+        if (e.touches.length === 0) return;
+        clientX = e.touches[0].clientX;
+        clientY = e.touches[0].clientY;
+      } else {
+        clientX = e.clientX;
+        clientY = e.clientY;
+      }
+
+      const canvasX = (clientX - rect.left) * scaleX;
+      const canvasY = (clientY - rect.top) * scaleY;
+
+      const cs = engine.getCellSize();
+      const col = Math.floor(canvasX / cs);
+      const row = Math.floor(canvasY / cs);
+
+      if (row < 0 || row >= mapData.grid.length || col < 0 || col >= mapData.grid[0].length) return;
+
+      if (selectedTower) {
+        const gridValue = mapData.grid[row][col];
+        if (gridValue !== 2) return;
+
+        const existingTower = towers.find(
+          (t) => t.position.row === row && t.position.col === col
+        );
+        if (existingTower) return;
+
+        const def = TOWER_DEFINITIONS[selectedTower];
+        if (gold < def.cost) return;
+
+        const newTower: Tower = {
+          id: `tower-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          type: selectedTower,
+          grade: 1,
+          position: { row, col },
+          stats: { ...def.baseStats },
+          level: 1,
+          mergeCount: 0,
+          targetingMode: 'first',
+        };
+
+        addTower(newTower);
+        useGameStore.getState().addGold(-def.cost);
+        setSelectedTower(null);
+        return;
+      }
+
+      const tappedTower = towers.find(
+        (t) => t.position.row === row && t.position.col === col
+      );
+      if (tappedTower) {
+        gameLoop.selectedTowerId.current = tappedTower.id;
+      } else {
+        gameLoop.selectedTowerId.current = null;
+      }
     },
-    [selectedTower, gold, addTower]
+    [selectedTower, gold, towers, addTower, gameLoop]
   );
+
+  const handleStartWave = useCallback(() => {
+    gameLoop.startNextWave();
+  }, [gameLoop]);
+
+  const handleQuizAnswer = useCallback(
+    (correct: boolean, reward: any) => {
+      setShowQuiz(false);
+      if (correct) {
+        useGameStore.getState().addGold(Math.round(50 * reward.goldMultiplier));
+      }
+      if (useGameStore.getState().isPaused) {
+        togglePause();
+      }
+    },
+    [togglePause]
+  );
+
+  const handleRetry = useCallback(() => {
+    reset();
+    setShowGameOver(false);
+    setShowStageClear(false);
+    stageLoadedRef.current = false;
+
+    setTimeout(() => {
+      const stage = getStage(worldId, stageId);
+      setTotalWaves(stage.waves.length);
+
+      const container = containerRef.current;
+      const canvas = canvasRef.current;
+      if (!container || !canvas) return;
+
+      const rect = container.getBoundingClientRect();
+      const cols = 12;
+      const rows = 8;
+      const cs = Math.floor(Math.min(rect.width / cols, rect.height / rows));
+      setCellSize(cs);
+      canvas.width = cols * cs;
+      canvas.height = rows * cs;
+      canvas.style.width = `${cols * cs}px`;
+      canvas.style.height = `${rows * cs}px`;
+
+      gameLoop.loadStage(stage.mapData, stage.waves, cs);
+      const engine = gameLoop.getEngine();
+      if (engine) {
+        engine.setCanvas(canvas, cs);
+      }
+      gameLoop.start();
+      stageLoadedRef.current = true;
+
+      waveTimerRef.current = setTimeout(() => {
+        gameLoop.startNextWave();
+      }, 3000);
+    }, 100);
+  }, [reset, gameLoop, worldId, stageId]);
 
   return (
     <div className="h-dvh flex flex-col bg-[#0F172A] relative overflow-hidden game-area">
@@ -104,70 +348,53 @@ function PlayPageContent() {
         combo={combo}
       />
 
+      {/* Stage Info Banner */}
+      <div className="relative z-10 flex items-center justify-center gap-3 py-1 bg-gradient-to-r from-indigo-600/20 via-purple-600/20 to-indigo-600/20 border-b border-indigo-500/20">
+        <span className="text-xs font-bold text-indigo-300">
+          월드 {worldId} - 스테이지 {stageId}
+        </span>
+        <div className="text-xs text-slate-400">
+          웨이브 {wave}/{totalWaves}
+        </div>
+      </div>
+
       {/* Game Canvas Area */}
-      <div className="flex-1 relative">
-        {/* Grid Placeholder - 8x12 game grid */}
-        <div className="absolute inset-0 flex items-center justify-center p-2">
-          <div className="grid grid-cols-8 gap-0.5 w-full max-w-md aspect-[2/3]">
-            {Array.from({ length: 96 }, (_, i) => {
-              const row = Math.floor(i / 8);
-              const col = i % 8;
-              const placedTower = towers.find(
-                (t) => t.position.row === row && t.position.col === col
-              );
+      <div ref={containerRef} className="flex-1 relative flex items-center justify-center bg-[#1a2435]">
+        <canvas
+          ref={canvasRef}
+          className="block cursor-pointer touch-none"
+          onClick={handleCanvasTap}
+          style={{ imageRendering: 'pixelated' }}
+        />
 
-              return (
-                <motion.div
-                  key={i}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={() => handleGridTap(row, col)}
-                  className={`
-                    aspect-square rounded-sm flex items-center justify-center text-xs
-                    transition-colors cursor-pointer select-none
-                    ${
-                      placedTower
-                        ? 'bg-slate-700/80 border border-slate-600/50'
-                        : selectedTower
-                          ? 'bg-slate-800/60 border border-indigo-500/30 hover:bg-indigo-500/20'
-                          : 'bg-slate-800/40 border border-slate-700/20'
-                    }
-                  `}
-                >
-                  {placedTower ? (
-                    <span className="text-sm">
-                      {TOWER_DEFINITIONS[placedTower.type].icon}
-                    </span>
-                  ) : null}
-                </motion.div>
-              );
-            })}
+        {/* Wave start button overlay */}
+        {!isGameOver && !showStageClear && (
+          <div className="absolute bottom-3 right-3 z-10">
+            <motion.button
+              whileTap={{ scale: 0.9 }}
+              onClick={handleStartWave}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-500 text-white text-xs font-bold shadow-lg shadow-indigo-500/30"
+            >
+              <Swords className="w-3.5 h-3.5" />
+              <span>다음 웨이브</span>
+            </motion.button>
           </div>
-        </div>
-
-        {/* Stage Info Overlay */}
-        <div className="absolute top-2 left-1/2 -translate-x-1/2">
-          <div className="px-3 py-1 rounded-full bg-slate-800/80 backdrop-blur-sm border border-slate-700/50 text-xs text-slate-400">
-            World {worldId} - Stage {stageId}
-          </div>
-        </div>
+        )}
       </div>
 
       {/* Control Bar */}
       <div className="bg-slate-900/90 backdrop-blur-xl border-t border-slate-700/50 safe-area-pb">
-        {/* Action Buttons Row */}
         <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-800/50">
-          {/* Back */}
           <Link href="/adventure">
-            <div className="w-9 h-9 rounded-xl bg-slate-800 flex items-center justify-center">
+            <div className="w-9 h-9 rounded-xl bg-slate-800 flex items-center justify-center active:bg-slate-700">
               <ArrowLeft className="w-4 h-4 text-slate-400" />
             </div>
           </Link>
 
-          {/* Pause */}
           <motion.button
             whileTap={{ scale: 0.9 }}
             onClick={togglePause}
-            className="w-9 h-9 rounded-xl bg-slate-800 flex items-center justify-center"
+            className="w-9 h-9 rounded-xl bg-slate-800 flex items-center justify-center active:bg-slate-700"
           >
             {isPaused ? (
               <Play className="w-4 h-4 text-emerald-400" />
@@ -176,11 +403,10 @@ function PlayPageContent() {
             )}
           </motion.button>
 
-          {/* Speed */}
           <motion.button
             whileTap={{ scale: 0.9 }}
             onClick={handleSpeedToggle}
-            className="h-9 px-3 rounded-xl bg-slate-800 flex items-center gap-1.5 text-sm"
+            className="h-9 px-3 rounded-xl bg-slate-800 flex items-center gap-1.5 text-sm active:bg-slate-700"
           >
             <FastForward className="w-4 h-4 text-amber-400" />
             <span className="text-amber-400 font-bold tabular-nums">x{speed}</span>
@@ -188,31 +414,16 @@ function PlayPageContent() {
 
           <div className="flex-1" />
 
-          {/* Quiz */}
           <motion.button
             whileTap={{ scale: 0.9 }}
-            onClick={() => setShowQuiz(true)}
-            className="h-9 px-3 rounded-xl bg-indigo-600 flex items-center gap-1.5 text-sm text-white font-medium"
+            onClick={() => {
+              if (!isPaused) togglePause();
+              setShowQuiz(true);
+            }}
+            className="h-9 px-3 rounded-xl bg-indigo-600 flex items-center gap-1.5 text-sm text-white font-medium active:bg-indigo-500"
           >
             <BookOpen className="w-4 h-4" />
             <span>퀴즈</span>
-          </motion.button>
-
-          {/* Merge */}
-          <motion.button
-            whileTap={{ scale: 0.9 }}
-            className="h-9 px-3 rounded-xl bg-purple-600 flex items-center gap-1.5 text-sm text-white font-medium"
-          >
-            <Merge className="w-4 h-4" />
-            <span>합성</span>
-          </motion.button>
-
-          {/* Hero Skill */}
-          <motion.button
-            whileTap={{ scale: 0.9 }}
-            className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center"
-          >
-            <Zap className="w-4 h-4 text-white" />
           </motion.button>
         </div>
 
@@ -235,7 +446,7 @@ function PlayPageContent() {
                       isSelected
                         ? 'bg-indigo-600/30 border-2 border-indigo-500 shadow-lg shadow-indigo-500/20'
                         : canAfford
-                          ? 'bg-slate-800/80 border-2 border-transparent hover:border-slate-600'
+                          ? 'bg-slate-800/80 border-2 border-transparent hover:border-slate-600 active:bg-slate-700'
                           : 'bg-slate-800/40 border-2 border-transparent opacity-40'
                     }
                   `}
@@ -258,6 +469,103 @@ function PlayPageContent() {
         </div>
       </div>
 
+      {/* Word Quiz Modal */}
+      <WordQuizModal
+        isOpen={showQuiz}
+        quiz={useGameStore.getState().currentQuiz}
+        combo={combo}
+        onAnswer={handleQuizAnswer}
+        onClose={() => {
+          setShowQuiz(false);
+          if (useGameStore.getState().isPaused) {
+            togglePause();
+          }
+        }}
+      />
+
+      {/* Stage Clear Modal */}
+      <Modal isOpen={showStageClear} closeOnBackdrop={false} closeOnEscape={false}>
+        <div className="bg-slate-800 rounded-3xl p-6 w-80 text-center border border-slate-700">
+          <motion.div
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            transition={{ type: 'spring', stiffness: 300 }}
+            className="text-5xl mb-4"
+          >
+            {String.fromCodePoint(0x1F389)}
+          </motion.div>
+          <h2 className="text-2xl font-black text-white mb-2">스테이지 클리어!</h2>
+          <p className="text-slate-400 text-sm mb-4">
+            월드 {worldId} - 스테이지 {stageId}
+          </p>
+
+          <div className="space-y-2 mb-6 text-sm">
+            <div className="flex justify-between text-slate-400 bg-slate-900/50 rounded-xl px-4 py-2">
+              <span>점수</span>
+              <span className="text-white font-bold">{score.toLocaleString()}</span>
+            </div>
+            <div className="flex justify-between text-slate-400 bg-slate-900/50 rounded-xl px-4 py-2">
+              <span>웨이브</span>
+              <span className="text-white font-bold">{wave}/{totalWaves}</span>
+            </div>
+            <div className="flex justify-between text-slate-400 bg-slate-900/50 rounded-xl px-4 py-2">
+              <span>남은 HP</span>
+              <span className="text-emerald-400 font-bold">{hp}/{maxHp}</span>
+            </div>
+            <div className="flex justify-between text-slate-400 bg-slate-900/50 rounded-xl px-4 py-2">
+              <span>타워 수</span>
+              <span className="text-white font-bold">{towers.length}</span>
+            </div>
+          </div>
+
+          <div className="flex gap-3">
+            <Link href="/adventure" className="flex-1">
+              <Button variant="ghost" fullWidth>
+                나가기
+              </Button>
+            </Link>
+            {stageId < 10 ? (
+              <Link
+                href={`/play?world=${worldId}&stage=${stageId + 1}`}
+                className="flex-1"
+                onClick={() => {
+                  reset();
+                  setShowStageClear(false);
+                  stageLoadedRef.current = false;
+                }}
+              >
+                <Button variant="primary" fullWidth>
+                  다음 스테이지
+                </Button>
+              </Link>
+            ) : worldId < 10 ? (
+              <Link
+                href={`/play?world=${worldId + 1}&stage=1`}
+                className="flex-1"
+                onClick={() => {
+                  reset();
+                  setShowStageClear(false);
+                  stageLoadedRef.current = false;
+                }}
+              >
+                <Button variant="primary" fullWidth>
+                  다음 월드
+                </Button>
+              </Link>
+            ) : (
+              <Button
+                variant="primary"
+                fullWidth
+                className="flex-1"
+                onClick={handleRetry}
+              >
+                재도전
+              </Button>
+            )}
+          </div>
+        </div>
+      </Modal>
+
       {/* Game Over Modal */}
       <Modal isOpen={showGameOver} closeOnBackdrop={false} closeOnEscape={false}>
         <div className="bg-slate-800 rounded-3xl p-6 w-80 text-center border border-slate-700">
@@ -267,11 +575,13 @@ function PlayPageContent() {
             transition={{ type: 'spring', stiffness: 300 }}
             className="text-5xl mb-4"
           >
-            {hp <= 0 ? '💀' : '🎉'}
+            {String.fromCodePoint(0x1F480)}
           </motion.div>
-          <h2 className="text-2xl font-black text-white mb-2">
-            {hp <= 0 ? '게임 오버' : '스테이지 클리어!'}
-          </h2>
+          <h2 className="text-2xl font-black text-white mb-2">게임 오버</h2>
+          <p className="text-slate-400 text-sm mb-4">
+            월드 {worldId} - 스테이지 {stageId}
+          </p>
+
           <div className="space-y-2 mb-6 text-sm">
             <div className="flex justify-between text-slate-400 bg-slate-900/50 rounded-xl px-4 py-2">
               <span>점수</span>
@@ -279,10 +589,10 @@ function PlayPageContent() {
             </div>
             <div className="flex justify-between text-slate-400 bg-slate-900/50 rounded-xl px-4 py-2">
               <span>웨이브</span>
-              <span className="text-white font-bold">{wave}</span>
+              <span className="text-white font-bold">{wave}/{totalWaves}</span>
             </div>
             <div className="flex justify-between text-slate-400 bg-slate-900/50 rounded-xl px-4 py-2">
-              <span>타워</span>
+              <span>타워 수</span>
               <span className="text-white font-bold">{towers.length}</span>
             </div>
           </div>
@@ -294,13 +604,10 @@ function PlayPageContent() {
               </Button>
             </Link>
             <Button
-              variant="primary"
+              variant="danger"
               fullWidth
               className="flex-1"
-              onClick={() => {
-                reset();
-                setShowGameOver(false);
-              }}
+              onClick={handleRetry}
             >
               재도전
             </Button>

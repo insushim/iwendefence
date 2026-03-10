@@ -9,6 +9,7 @@ import {
   BookOpen,
   ArrowLeft,
   Swords,
+  Heart,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
@@ -63,6 +64,15 @@ function PlayPageContent() {
   const [showQuiz, setShowQuiz] = useState(false);
   const [cellSize, setCellSize] = useState(60);
   const [totalWaves, setTotalWaves] = useState(0);
+
+  // ── New: Quiz placement system (replacing ads) ──
+  const [showWaveBonus, setShowWaveBonus] = useState(false);
+  const [showReviveQuiz, setShowReviveQuiz] = useState(false);
+  const [reviveUsed, setReviveUsed] = useState(false);
+  const [waveBonusGold, setWaveBonusGold] = useState(0);
+  const [quizContext, setQuizContext] = useState<string | null>(null);
+  const [showBossWarning, setShowBossWarning] = useState(false);
+  const [bossWarningType, setBossWarningType] = useState<string>('');
 
   const gameLoop = useGameLoop(canvasRef);
 
@@ -185,12 +195,51 @@ function PlayPageContent() {
     return () => clearInterval(checkInterval);
   }, [wave, gameLoop, isGameOver, worldId, stageId, score, setHighScore, unlockStage]);
 
-  // Game over handling
+  // Game over handling - offer revive quiz first (like "watch ad to continue")
   useEffect(() => {
     if (isGameOver && !showStageClear) {
-      setShowGameOver(true);
+      if (!reviveUsed) {
+        setShowReviveQuiz(true);
+      } else {
+        setShowGameOver(true);
+      }
     }
-  }, [isGameOver, showStageClear]);
+  }, [isGameOver, showStageClear, reviveUsed]);
+
+  // Wave complete bonus quiz (like "watch ad for double gold")
+  useEffect(() => {
+    if (wave > 0 && wave % 2 === 0 && !isGameOver && !showStageClear) {
+      // 40% chance to offer bonus quiz after every 2nd wave
+      if (Math.random() < 0.4) {
+        const bonusGold = 30 + wave * 5;
+        setWaveBonusGold(bonusGold);
+        setShowWaveBonus(true);
+
+        // Auto-dismiss after 5 seconds
+        const timer = setTimeout(() => setShowWaveBonus(false), 5000);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [wave, isGameOver, showStageClear]);
+
+  // Handle revive quiz result
+  const handleReviveQuiz = useCallback(() => {
+    setShowReviveQuiz(false);
+    setQuizContext('revive');
+    setShowQuiz(true);
+  }, []);
+
+  const handleReviveSkip = useCallback(() => {
+    setShowReviveQuiz(false);
+    setShowGameOver(true);
+  }, []);
+
+  // Handle wave bonus quiz
+  const handleWaveBonusQuiz = useCallback(() => {
+    setShowWaveBonus(false);
+    setQuizContext('wave_bonus');
+    setShowQuiz(true);
+  }, []);
 
   // Sync pause state to engine
   useEffect(() => {
@@ -561,6 +610,131 @@ function PlayPageContent() {
           </div>
         </div>
       </Modal>
+
+      {/* Revive Quiz Offer Modal (= "Watch ad to continue" replacement) */}
+      <Modal isOpen={showReviveQuiz} closeOnBackdrop={false} closeOnEscape={false}>
+        <motion.div
+          initial={{ scale: 0.8, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          className="bg-slate-800 rounded-3xl p-6 w-80 text-center border border-red-500/30 relative overflow-hidden"
+        >
+          {/* Animated background pulse */}
+          <motion.div
+            animate={{ opacity: [0.05, 0.15, 0.05] }}
+            transition={{ repeat: Infinity, duration: 2 }}
+            className="absolute inset-0 bg-gradient-to-b from-red-500/10 to-transparent"
+          />
+
+          <div className="relative z-10">
+            <motion.div
+              animate={{ scale: [1, 1.1, 1] }}
+              transition={{ repeat: Infinity, duration: 1.5 }}
+              className="text-5xl mb-3"
+            >
+              {String.fromCodePoint(0x1F4D6)}
+            </motion.div>
+
+            <h2 className="text-xl font-black text-white mb-2">부활 기회!</h2>
+            <p className="text-sm text-slate-400 mb-1">
+              영단어 퀴즈를 맞히면 HP 50%로 부활합니다
+            </p>
+            <p className="text-xs text-red-400/60 mb-4">
+              (게임당 1회 사용 가능)
+            </p>
+
+            {/* Reward Preview */}
+            <div className="bg-slate-900/60 rounded-xl p-3 mb-4 space-y-1.5">
+              <div className="flex items-center justify-center gap-2">
+                <Heart className="w-4 h-4 text-red-400" fill="currentColor" />
+                <span className="text-sm font-bold text-emerald-300">
+                  HP {Math.ceil(maxHp * 0.5)} 회복
+                </span>
+              </div>
+              <div className="flex items-center justify-center gap-2">
+                <span className="text-xs text-slate-500">+ 3초 무적</span>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <motion.button
+                whileTap={{ scale: 0.95 }}
+                onClick={handleReviveSkip}
+                className="flex-1 py-3 rounded-xl bg-slate-700 text-slate-400 text-sm font-medium"
+              >
+                포기하기
+              </motion.button>
+              <motion.button
+                whileTap={{ scale: 0.95 }}
+                onClick={handleReviveQuiz}
+                className="flex-1 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-500 text-white text-sm font-bold shadow-lg shadow-emerald-500/30"
+              >
+                퀴즈 도전!
+              </motion.button>
+            </div>
+          </div>
+        </motion.div>
+      </Modal>
+
+      {/* Wave Bonus Quiz Banner (= "Watch ad for bonus" replacement) */}
+      <AnimatePresence>
+        {showWaveBonus && !isPaused && !showQuiz && (
+          <motion.div
+            initial={{ y: -60, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: -60, opacity: 0 }}
+            className="absolute top-16 left-1/2 -translate-x-1/2 z-30"
+          >
+            <motion.button
+              whileTap={{ scale: 0.95 }}
+              onClick={handleWaveBonusQuiz}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-gradient-to-r from-amber-600/90 to-orange-600/90 backdrop-blur-sm border border-amber-400/30 shadow-lg shadow-amber-500/20"
+            >
+              <span className="text-lg">{String.fromCodePoint(0x1F4D6)}</span>
+              <div className="text-left">
+                <p className="text-xs font-bold text-white">퀴즈 풀고 골드 2배!</p>
+                <p className="text-[10px] text-amber-200">+{waveBonusGold}G 보너스</p>
+              </div>
+              <motion.div
+                animate={{ scale: [1, 1.2, 1] }}
+                transition={{ repeat: Infinity, duration: 1 }}
+                className="text-amber-300 text-xs font-bold"
+              >
+                GO
+              </motion.div>
+            </motion.button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Boss Warning Overlay */}
+      <AnimatePresence>
+        {showBossWarning && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 z-25 flex items-center justify-center pointer-events-none"
+          >
+            <motion.div
+              initial={{ scale: 2, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.5, opacity: 0 }}
+              transition={{ type: 'spring', stiffness: 200 }}
+              className="text-center"
+            >
+              <motion.p
+                animate={{ scale: [1, 1.05, 1] }}
+                transition={{ repeat: Infinity, duration: 0.8 }}
+                className="text-3xl font-black text-red-500 drop-shadow-lg"
+                style={{ textShadow: '0 0 20px rgba(255,0,0,0.5)' }}
+              >
+                BOSS INCOMING!
+              </motion.p>
+              <p className="text-sm text-red-300 mt-1">{bossWarningType}</p>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Game Over Modal */}
       <Modal isOpen={showGameOver} closeOnBackdrop={false} closeOnEscape={false}>

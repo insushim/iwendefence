@@ -407,3 +407,158 @@ export interface SettingsActions {
   setDifficulty: (difficulty: 1 | 2 | 3 | 4 | 5) => void;
   setLanguage: (language: 'ko' | 'en') => void;
 }
+
+// ── Branching Upgrade System (BTD6-style) ─────────────────
+
+export type UpgradePath = 0 | 1 | 2;
+export type UpgradeTier = 0 | 1 | 2 | 3 | 4 | 5;
+
+/** Tracks which tier each of the 3 paths is at for a tower */
+export type TowerUpgradePaths = [UpgradeTier, UpgradeTier, UpgradeTier];
+
+export interface TowerBranchUpgrade {
+  id: string;
+  towerType: TowerType;
+  path: UpgradePath;
+  tier: 1 | 2 | 3 | 4 | 5;
+  name: string;
+  nameKr: string;
+  description: string;
+  descriptionKr: string;
+  cost: number;
+  icon: string;
+  effect: BranchUpgradeEffect;
+}
+
+export interface BranchUpgradeEffect {
+  damageAdd?: number;
+  damageMultiply?: number;
+  rangeAdd?: number;
+  rangeMultiply?: number;
+  attackSpeedAdd?: number;
+  attackSpeedMultiply?: number;
+  critChanceAdd?: number;
+  critDamageAdd?: number;
+  specialAbility?: string;
+  aoeRadiusAdd?: number;
+  slowPercentAdd?: number;
+  dotDamageAdd?: number;
+  chainCountAdd?: number;
+  goldProduceAdd?: number;
+  healAmountAdd?: number;
+}
+
+// ── Quiz Context System (Ad Replacement) ──────────────────
+
+export type QuizContext =
+  | { type: 'wave_bonus'; waveIndex: number; bonusGold: number }
+  | { type: 'boss'; waveIndex: number }
+  | { type: 'revive' }
+  | { type: 'free_tower' }
+  | { type: 'crisis'; currentHp: number }
+  | { type: 'treasure'; chestId: string }
+  | { type: 'speed_unlock' }
+  | { type: 'streak_bonus'; comboCount: number }
+  | { type: 'quick'; waveIndex: number }
+  | { type: 'manual' }
+  | null;
+
+// ── Tower with Branching Upgrades ─────────────────────────
+
+export interface TowerV2 extends Tower {
+  upgradePaths: TowerUpgradePaths;
+  specialAbilities: string[];
+  synergyBonuses: { type: string; value: number }[];
+}
+
+// ── Treasure Chest ────────────────────────────────────────
+
+export interface TreasureChest {
+  id: string;
+  position: WorldPosition;
+  spawnWave: number;
+  collected: boolean;
+  reward: ChestReward;
+}
+
+export type ChestReward =
+  | { type: 'gold'; amount: number }
+  | { type: 'diamond'; amount: number }
+  | { type: 'tower_upgrade'; towerType: TowerType }
+  | { type: 'buff'; buffType: string; duration: number; value: number }
+  | { type: 'heal'; amount: number };
+
+// ── Achievement System ────────────────────────────────────
+
+export interface Achievement {
+  id: string;
+  name: string;
+  nameKr: string;
+  description: string;
+  descriptionKr: string;
+  icon: string;
+  condition: AchievementCondition;
+  reward: AchievementReward;
+  unlocked: boolean;
+  unlockedAt?: number;
+}
+
+export type AchievementCondition =
+  | { type: 'quiz_streak'; count: number }
+  | { type: 'waves_cleared'; count: number }
+  | { type: 'enemies_killed'; count: number }
+  | { type: 'towers_built'; count: number }
+  | { type: 'words_mastered'; count: number }
+  | { type: 'stages_cleared'; count: number }
+  | { type: 'boss_killed'; bossType?: EnemyType }
+  | { type: 'no_damage_wave' }
+  | { type: 'speed_clear'; maxWaves: number; maxTime: number };
+
+export type AchievementReward =
+  | { type: 'gold'; amount: number }
+  | { type: 'diamond'; amount: number }
+  | { type: 'hero_unlock'; heroId: string }
+  | { type: 'title'; title: string };
+
+// ── Synergy System ────────────────────────────────────────
+
+export interface TowerSynergy {
+  id: string;
+  name: string;
+  nameKr: string;
+  description: string;
+  requiredTypes: TowerType[];
+  requiredCount: number;
+  bonus: SynergyBonus;
+}
+
+export interface SynergyBonus {
+  damageMultiplier?: number;
+  attackSpeedMultiplier?: number;
+  rangeMultiplier?: number;
+  specialEffect?: string;
+}
+
+// ── Daily Challenge ───────────────────────────────────────
+
+export interface DailyChallenge {
+  id: string;
+  date: string; // YYYY-MM-DD
+  name: string;
+  nameKr: string;
+  description: string;
+  modifiers: ChallengeModifier[];
+  worldId: WorldId;
+  stageId: StageId;
+  rewards: { gold: number; diamonds: number };
+}
+
+export type ChallengeModifier =
+  | { type: 'enemy_hp_multiply'; value: number }
+  | { type: 'enemy_speed_multiply'; value: number }
+  | { type: 'tower_cost_multiply'; value: number }
+  | { type: 'starting_gold'; value: number }
+  | { type: 'max_towers'; value: number }
+  | { type: 'quiz_only_type'; quizType: QuizType }
+  | { type: 'no_healer' }
+  | { type: 'double_boss' };

@@ -17,6 +17,10 @@ import type {
   GameSpeed,
   TargetingMode,
   Element,
+  TreasureChest,
+  ChestReward,
+  TowerSynergy,
+  SynergyBonus,
 } from '../types/game';
 
 import {
@@ -229,6 +233,11 @@ export interface GameEngineCallbacks {
   onAllWavesComplete: () => void;
   onGameOver: () => void;
   onScoreAdd: (points: number) => void;
+  onTreasureSpawn?: (chest: TreasureChest) => void;
+  onSynergyActivated?: (synergy: TowerSynergy) => void;
+  onComboMilestone?: (combo: number) => void;
+  onBossWarning?: (bossType: EnemyType, waveIndex: number) => void;
+  onCriticalHp?: (hp: number, maxHp: number) => void;
 }
 
 // ============================================================
@@ -298,6 +307,32 @@ export class GameEngine {
   // ── Healer tracking ──────────────────────────────────────
   private healerTimers: Map<string, number> = new Map();
   private static readonly HEALER_INTERVAL = 3;
+
+  // ── Treasure Chests ────────────────────────────────────
+  public treasureChests: TreasureChest[] = [];
+  private lastChestWave: number = 0;
+  private static readonly CHEST_INTERVAL = 3; // Every 3 waves
+
+  // ── Synergy System ─────────────────────────────────────
+  private activeSynergies: Map<string, SynergyBonus> = new Map();
+
+  // ── Screen Effects (for renderer to read) ──────────────
+  public screenShake: { intensity: number; duration: number; elapsed: number } | null = null;
+  public slowMotion: { timeScale: number; duration: number; elapsed: number } | null = null;
+  public flashOverlay: { color: string; alpha: number; duration: number; elapsed: number } | null = null;
+
+  // ── Kill Tracking ──────────────────────────────────────
+  private totalKills: number = 0;
+  private waveKills: number = 0;
+  private killCombo: number = 0;
+  private lastKillTime: number = 0;
+  private static readonly COMBO_TIMEOUT = 2; // seconds
+
+  // ── Boss Warning ───────────────────────────────────────
+  private bossWarningShown: Set<number> = new Set();
+
+  // ── Invincibility ──────────────────────────────────────
+  private invincibleTimer: number = 0;
 
   constructor(callbacks: GameEngineCallbacks) {
     this.callbacks = callbacks;
@@ -494,15 +529,31 @@ export class GameEngine {
   // ════════════════════════════════════════════════════════════
 
   private update(dt: number): void {
-    this.updateWaveSpawning(dt);
-    this.updateEnemies(dt);
-    this.updateTowers(dt);
-    this.updateProjectiles(dt);
-    this.updateEffects(dt);
-    this.updateDamageTexts(dt);
-    this.updateGoldMines(dt);
-    this.updateHealers(dt);
+    // Apply slow motion
+    let effectiveDt = dt;
+    if (this.slowMotion) {
+      this.slowMotion.elapsed += dt;
+      if (this.slowMotion.elapsed >= this.slowMotion.duration) {
+        this.slowMotion = null;
+      } else {
+        effectiveDt = dt * this.slowMotion.timeScale;
+      }
+    }
+
+    this.updateWaveSpawning(effectiveDt);
+    this.updateEnemies(effectiveDt);
+    this.updateTowers(effectiveDt);
+    this.updateProjectiles(effectiveDt);
+    this.updateEffects(effectiveDt);
+    this.updateDamageTexts(effectiveDt);
+    this.updateGoldMines(effectiveDt);
+    this.updateHealers(effectiveDt);
+    this.updateScreenEffects(dt); // raw dt for screen effects
+    this.updateKillCombo(dt);
+    this.updateInvincibility(dt);
     this.checkWaveComplete();
+    this.checkBossWarning();
+    this.checkCriticalHp();
     this.checkGameOver();
   }
 
@@ -607,9 +658,16 @@ export class GameEngine {
         if (enemy.pathProgress >= 1) {
           // Enemy reached the end — deal damage to player
           toRemove.push(enemy.id);
-          const dmg = BOSS_TYPES.has(enemy.type) ? 5 : 1;
-          this.hp = Math.max(0, this.hp - dmg);
-          this.callbacks.onHpLost(dmg);
+          if (!this.isInvincible()) {
+            const dmg = BOSS_TYPES.has(enemy.type) ? 5 : 1;
+            this.hp = Math.max(0, this.hp - dmg);
+            this.callbacks.onHpLost(dmg);
+            // Screen shake on base damage
+            this.triggerScreenShake(BOSS_TYPES.has(enemy.type) ? 6 : 3, 0.3);
+            this.triggerFlash('#ff0000', 0.2, 0.2);
+          }
+          // Reset kill combo when enemy reaches base
+          this.killCombo = 0;
           continue;
         }
 
@@ -621,23 +679,7 @@ export class GameEngine {
       // Check if dead
       if (enemy.hp <= 0) {
         toRemove.push(enemy.id);
-        const goldReward = Math.round(enemy.rewards.gold * this.goldMultiplier);
-        this.gold += goldReward;
-        this.score += enemy.rewards.exp * 10;
-        this.callbacks.onGoldEarned(goldReward);
-        this.callbacks.onEnemyKilled(enemy);
-        this.callbacks.onScoreAdd(enemy.rewards.exp * 10);
-
-        // Death effect
-        this.effects.push({
-          id: nextId('fx'),
-          type: 'death',
-          position: { ...enemy.position },
-          radius: BOSS_TYPES.has(enemy.type) ? 40 : 20,
-          duration: 0.5,
-          elapsed: 0,
-          color: '#ff4444',
-        });
+        this.onEnemyDeath(enemy);
       }
     }
 
@@ -1101,7 +1143,21 @@ export class GameEngine {
 
     if (this.waveSpawn.allSpawned && this.enemies.length === 0) {
       this.waveActive = false;
+      this.waveKills = 0;
       this.callbacks.onWaveComplete(this.currentWaveIndex);
+
+      // Update synergies after wave
+      this.updateSynergies();
+
+      // Clean up collected treasure chests
+      this.treasureChests = this.treasureChests.filter(c => !c.collected);
+
+      // Spawn treasure chest every N waves
+      if (this.currentWaveIndex > 0 &&
+          this.currentWaveIndex - this.lastChestWave >= GameEngine.CHEST_INTERVAL) {
+        this.lastChestWave = this.currentWaveIndex;
+        this.spawnTreasureChest();
+      }
 
       if (this.currentWaveIndex >= this.waves.length - 1) {
         this.allWavesDone = true;
@@ -1196,4 +1252,352 @@ export class GameEngine {
   isWaveActive(): boolean {
     return this.waveActive;
   }
+
+  getTreasureChests(): TreasureChest[] {
+    return this.treasureChests;
+  }
+
+  getScreenShake(): typeof this.screenShake {
+    return this.screenShake;
+  }
+
+  getSlowMotion(): typeof this.slowMotion {
+    return this.slowMotion;
+  }
+
+  getFlashOverlay(): typeof this.flashOverlay {
+    return this.flashOverlay;
+  }
+
+  getKillCombo(): number {
+    return this.killCombo;
+  }
+
+  getTotalKills(): number {
+    return this.totalKills;
+  }
+
+  getActiveSynergies(): Map<string, SynergyBonus> {
+    return this.activeSynergies;
+  }
+
+  // ════════════════════════════════════════════════════════════
+  // NEW SYSTEMS
+  // ════════════════════════════════════════════════════════════
+
+  // ── Screen Effects ─────────────────────────────────────
+
+  triggerScreenShake(intensity: number, duration: number): void {
+    this.screenShake = { intensity, duration, elapsed: 0 };
+  }
+
+  triggerSlowMotion(timeScale: number, duration: number): void {
+    this.slowMotion = { timeScale, duration, elapsed: 0 };
+  }
+
+  triggerFlash(color: string, alpha: number, duration: number): void {
+    this.flashOverlay = { color, alpha, duration, elapsed: 0 };
+  }
+
+  private updateScreenEffects(dt: number): void {
+    if (this.screenShake) {
+      this.screenShake.elapsed += dt;
+      if (this.screenShake.elapsed >= this.screenShake.duration) {
+        this.screenShake = null;
+      }
+    }
+    if (this.flashOverlay) {
+      this.flashOverlay.elapsed += dt;
+      if (this.flashOverlay.elapsed >= this.flashOverlay.duration) {
+        this.flashOverlay = null;
+      }
+    }
+  }
+
+  // ── Kill Combo ─────────────────────────────────────────
+
+  private updateKillCombo(dt: number): void {
+    if (this.killCombo > 0) {
+      const timeSinceLastKill = (performance.now() / 1000) - this.lastKillTime;
+      if (timeSinceLastKill > GameEngine.COMBO_TIMEOUT) {
+        this.killCombo = 0;
+      }
+    }
+  }
+
+  // ── Invincibility ──────────────────────────────────────
+
+  setInvincible(duration: number): void {
+    this.invincibleTimer = duration;
+  }
+
+  private updateInvincibility(dt: number): void {
+    if (this.invincibleTimer > 0) {
+      this.invincibleTimer = Math.max(0, this.invincibleTimer - dt);
+    }
+  }
+
+  isInvincible(): boolean {
+    return this.invincibleTimer > 0;
+  }
+
+  // ── Boss Warning ───────────────────────────────────────
+
+  private checkBossWarning(): void {
+    if (!this.waveActive) return;
+
+    const nextWaveIdx = this.currentWaveIndex + 1;
+    if (nextWaveIdx >= this.waves.length) return;
+    if (this.bossWarningShown.has(nextWaveIdx)) return;
+
+    const nextWave = this.waves[nextWaveIdx];
+    if (nextWave?.bossWave) {
+      // Find the boss enemy type
+      for (const group of nextWave.enemies) {
+        if (BOSS_TYPES.has(group.type)) {
+          this.bossWarningShown.add(nextWaveIdx);
+          this.callbacks.onBossWarning?.(group.type, nextWaveIdx);
+          break;
+        }
+      }
+    }
+  }
+
+  // ── Critical HP Check ──────────────────────────────────
+
+  private checkCriticalHp(): void {
+    if (this.hp > 0 && this.hp <= this.maxHp * 0.25) {
+      this.callbacks.onCriticalHp?.(this.hp, this.maxHp);
+    }
+  }
+
+  // ── Treasure Chest System ──────────────────────────────
+
+  spawnTreasureChest(): void {
+    if (!this.mapData) return;
+
+    const path = this.mapData.path;
+    if (path.length < 3) return;
+
+    // Place chest near a random point on the path (but off the path)
+    const pathIdx = Math.floor(Math.random() * (path.length - 2)) + 1;
+    const pathPos = path[pathIdx];
+
+    // Offset from path
+    const offsets: [number, number][] = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+    const validOffsets = offsets.filter(([dr, dc]) => {
+      const r = pathPos[0] + dr;
+      const c = pathPos[1] + dc;
+      return r >= 0 && r < this.mapData!.grid.length &&
+             c >= 0 && c < this.mapData!.grid[0].length &&
+             this.mapData!.grid[r][c] !== 1; // not a wall/path
+    });
+
+    if (validOffsets.length === 0) return;
+
+    const [dr, dc] = validOffsets[Math.floor(Math.random() * validOffsets.length)];
+    const chestRow = pathPos[0] + dr;
+    const chestCol = pathPos[1] + dc;
+
+    // Generate random reward
+    const rewards: ChestReward[] = [
+      { type: 'gold', amount: 50 + Math.floor(Math.random() * 100) },
+      { type: 'gold', amount: 100 + Math.floor(Math.random() * 150) },
+      { type: 'diamond', amount: 1 + Math.floor(Math.random() * 3) },
+      { type: 'heal', amount: 3 + Math.floor(Math.random() * 5) },
+      { type: 'buff', buffType: 'damage', duration: 15, value: 0.3 },
+      { type: 'buff', buffType: 'speed', duration: 15, value: 0.2 },
+    ];
+
+    const reward = rewards[Math.floor(Math.random() * rewards.length)];
+
+    const chest: TreasureChest = {
+      id: nextId('chest'),
+      position: {
+        x: chestCol * this.cellSize + this.cellSize / 2,
+        y: chestRow * this.cellSize + this.cellSize / 2,
+      },
+      spawnWave: this.currentWaveIndex,
+      collected: false,
+      reward,
+    };
+
+    this.treasureChests.push(chest);
+    this.callbacks.onTreasureSpawn?.(chest);
+  }
+
+  collectTreasureChest(chestId: string): ChestReward | null {
+    const chest = this.treasureChests.find(c => c.id === chestId && !c.collected);
+    if (!chest) return null;
+
+    chest.collected = true;
+    return chest.reward;
+  }
+
+  // ── Synergy System ─────────────────────────────────────
+
+  updateSynergies(): void {
+    this.activeSynergies.clear();
+
+    // Count towers by type
+    const towerCounts = new Map<TowerType, number>();
+    for (const tower of this.towers) {
+      towerCounts.set(tower.type, (towerCounts.get(tower.type) ?? 0) + 1);
+    }
+
+    // Check synergy conditions
+    for (const synergy of TOWER_SYNERGIES) {
+      let active = true;
+      for (const type of synergy.requiredTypes) {
+        if ((towerCounts.get(type) ?? 0) < synergy.requiredCount) {
+          active = false;
+          break;
+        }
+      }
+      if (active) {
+        this.activeSynergies.set(synergy.id, synergy.bonus);
+        this.callbacks.onSynergyActivated?.(synergy);
+      }
+    }
+  }
+
+  getSynergyDamageMultiplier(): number {
+    let multiplier = 1;
+    for (const bonus of this.activeSynergies.values()) {
+      if (bonus.damageMultiplier) multiplier *= bonus.damageMultiplier;
+    }
+    return multiplier;
+  }
+
+  // ── Enhanced Enemy Death ──────────────────────────────
+
+  private onEnemyDeath(enemy: Enemy): void {
+    const goldReward = Math.round(enemy.rewards.gold * this.goldMultiplier);
+    this.gold += goldReward;
+    this.score += enemy.rewards.exp * 10;
+
+    // Kill combo
+    this.totalKills += 1;
+    this.waveKills += 1;
+    this.killCombo += 1;
+    this.lastKillTime = performance.now() / 1000;
+
+    // Combo milestone notifications
+    if (this.killCombo > 0 && this.killCombo % 10 === 0) {
+      this.callbacks.onComboMilestone?.(this.killCombo);
+      // Bonus gold for combo
+      const comboBonus = Math.round(this.killCombo * 2);
+      this.gold += comboBonus;
+      this.callbacks.onGoldEarned(comboBonus);
+    }
+
+    this.callbacks.onGoldEarned(goldReward);
+    this.callbacks.onEnemyKilled(enemy);
+    this.callbacks.onScoreAdd(enemy.rewards.exp * 10);
+
+    // Death visual effects
+    const isBoss = BOSS_TYPES.has(enemy.type);
+    this.effects.push({
+      id: nextId('fx'),
+      type: 'death',
+      position: { ...enemy.position },
+      radius: isBoss ? 60 : 20,
+      duration: isBoss ? 1.0 : 0.5,
+      elapsed: 0,
+      color: isBoss ? '#ff8800' : '#ff4444',
+    });
+
+    // Boss death: screen shake + slow motion + flash
+    if (isBoss) {
+      this.triggerScreenShake(8, 0.5);
+      this.triggerSlowMotion(0.3, 0.8);
+      this.triggerFlash('#ffffff', 0.4, 0.3);
+    } else if (this.killCombo >= 5) {
+      // Multi-kill screen shake (smaller)
+      this.triggerScreenShake(2, 0.15);
+    }
+
+    // Treasure chest spawn check
+    if (this.currentWaveIndex - this.lastChestWave >= GameEngine.CHEST_INTERVAL && isBoss) {
+      this.lastChestWave = this.currentWaveIndex;
+      this.spawnTreasureChest();
+    }
+  }
 }
+
+// ── Tower Synergy Definitions ────────────────────────────
+
+const TOWER_SYNERGIES: TowerSynergy[] = [
+  {
+    id: 'elemental_trio',
+    name: 'Elemental Trio',
+    nameKr: '원소 삼위일체',
+    description: 'Have Fire, Ice, and Lightning towers',
+    requiredTypes: ['FLAME' as TowerType, 'ICE' as TowerType, 'LIGHTNING' as TowerType],
+    requiredCount: 1,
+    bonus: { damageMultiplier: 1.2 },
+  },
+  {
+    id: 'magic_circle',
+    name: 'Magic Circle',
+    nameKr: '마법진',
+    description: 'Have 3 or more Magic towers',
+    requiredTypes: ['MAGIC' as TowerType],
+    requiredCount: 3,
+    bonus: { damageMultiplier: 1.15, rangeMultiplier: 1.1 },
+  },
+  {
+    id: 'archer_brigade',
+    name: 'Archer Brigade',
+    nameKr: '궁수대',
+    description: 'Have 3 or more Archer towers',
+    requiredTypes: ['ARCHER' as TowerType],
+    requiredCount: 3,
+    bonus: { attackSpeedMultiplier: 1.2 },
+  },
+  {
+    id: 'artillery_battery',
+    name: 'Artillery Battery',
+    nameKr: '포병대',
+    description: 'Have Cannon and Sniper towers',
+    requiredTypes: ['CANNON' as TowerType, 'SNIPER' as TowerType],
+    requiredCount: 1,
+    bonus: { damageMultiplier: 1.25 },
+  },
+  {
+    id: 'nature_harmony',
+    name: 'Nature Harmony',
+    nameKr: '자연의 조화',
+    description: 'Have Poison, Healer, and Goldmine',
+    requiredTypes: ['POISON' as TowerType, 'HEALER' as TowerType, 'GOLDMINE' as TowerType],
+    requiredCount: 1,
+    bonus: { damageMultiplier: 1.1, specialEffect: 'hp_regen' },
+  },
+  {
+    id: 'word_scholar',
+    name: 'Word Scholar',
+    nameKr: '단어 학자',
+    description: 'Have 2 or more Word towers',
+    requiredTypes: ['WORD' as TowerType],
+    requiredCount: 2,
+    bonus: { damageMultiplier: 1.3, specialEffect: 'quiz_bonus' },
+  },
+  {
+    id: 'fortress_wall',
+    name: 'Fortress Wall',
+    nameKr: '요새',
+    description: 'Have 3 or more Barricades',
+    requiredTypes: ['BARRICADE' as TowerType],
+    requiredCount: 3,
+    bonus: { specialEffect: 'thorns_aura' },
+  },
+  {
+    id: 'economic_empire',
+    name: 'Economic Empire',
+    nameKr: '경제 제국',
+    description: 'Have 3 or more Goldmines',
+    requiredTypes: ['GOLDMINE' as TowerType],
+    requiredCount: 3,
+    bonus: { specialEffect: 'gold_interest' },
+  },
+];

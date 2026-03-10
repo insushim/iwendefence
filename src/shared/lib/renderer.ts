@@ -12,6 +12,7 @@ import type {
   MapData,
   GridPosition,
   WorldPosition,
+  SynergyBonus,
 } from '../types/game';
 
 import type {
@@ -22,6 +23,7 @@ import type {
 } from './gameEngine';
 
 import { getCellCenter, getDistanceBetweenPoints } from './pathfinding';
+import { particleSystem, screenEffects } from './particleSystem';
 
 // ── 3D Constants ────────────────────────────────────────────
 
@@ -213,9 +215,27 @@ export function renderGame(
   const mapData = engine.getMapData();
   const cellSize = engine.getCellSize();
 
+  // ── Screen Shake ──────────────────────────────────────
+  const shake = engine.getScreenShake();
+  if (shake) {
+    const progress = shake.elapsed / shake.duration;
+    const decay = 1 - progress;
+    const shakeX = (Math.random() - 0.5) * shake.intensity * decay * 2;
+    const shakeY = (Math.random() - 0.5) * shake.intensity * decay * 2;
+    ctx.save();
+    ctx.translate(shakeX, shakeY);
+  }
+
   if (mapData) {
     drawMap(ctx, mapData, cellSize);
     drawPath(ctx, mapData.path, cellSize);
+  }
+
+  // ── Treasure Chests ───────────────────────────────────
+  for (const chest of engine.getTreasureChests()) {
+    if (!chest.collected) {
+      drawTreasureChest(ctx, chest, cellSize);
+    }
   }
 
   // Shadows layer
@@ -243,7 +263,217 @@ export function renderGame(
 
   drawEffects(ctx, engine.getEffects());
   drawDamageTexts(ctx, engine.getDamageTexts());
+
+  // ── Particle System ───────────────────────────────────
+  const rawDt = 1 / 60; // approximate frame dt
+  particleSystem.update(rawDt);
+  particleSystem.render(ctx);
+
+  // ── Kill Combo Display ────────────────────────────────
+  const killCombo = engine.getKillCombo();
+  if (killCombo >= 3) {
+    drawKillCombo(ctx, killCombo, ctx.canvas.width, ctx.canvas.height);
+  }
+
   drawUIOverlay(ctx, engine);
+
+  // Restore from screen shake
+  if (shake) {
+    ctx.restore();
+  }
+
+  // ── Flash Overlay ─────────────────────────────────────
+  const flash = engine.getFlashOverlay();
+  if (flash) {
+    const progress = flash.elapsed / flash.duration;
+    const alpha = flash.alpha * (1 - progress);
+    ctx.fillStyle = flash.color;
+    ctx.globalAlpha = alpha;
+    ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    ctx.globalAlpha = 1;
+  }
+
+  // ── Vignette (when HP is low) ─────────────────────────
+  const hp = engine.getHp();
+  const maxHp = engine.getMaxHp();
+  if (hp > 0 && hp <= maxHp * 0.3) {
+    drawDangerVignette(ctx, hp / maxHp);
+  }
+
+  // ── Synergy Indicators ────────────────────────────────
+  const synergies = engine.getActiveSynergies();
+  if (synergies.size > 0) {
+    drawSynergyIndicators(ctx, synergies, ctx.canvas.width);
+  }
+}
+
+// ── Treasure Chest Drawing ──────────────────────────────
+
+function drawTreasureChest(
+  ctx: CanvasRenderingContext2D,
+  chest: { position: WorldPosition; collected: boolean },
+  cellSize: number
+): void {
+  const { x, y } = chest.position;
+  const t = getTime();
+  const bobY = Math.sin(t * 3) * 3;
+  const size = cellSize * 0.3;
+
+  ctx.save();
+
+  // Glow
+  const glowAlpha = Math.sin(t * 4) * 0.15 + 0.3;
+  const glowGrad = ctx.createRadialGradient(x, y + bobY, 0, x, y + bobY, size * 2);
+  glowGrad.addColorStop(0, `rgba(255,215,0,${glowAlpha})`);
+  glowGrad.addColorStop(1, 'rgba(255,215,0,0)');
+  ctx.fillStyle = glowGrad;
+  ctx.beginPath();
+  ctx.arc(x, y + bobY, size * 2, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Shadow
+  drawShadow(ctx, x, y + size * 0.7, size * 0.8, size * 0.3, 0.3);
+
+  // Chest body
+  const bodyGrad = ctx.createLinearGradient(x - size, y + bobY, x + size, y + bobY);
+  bodyGrad.addColorStop(0, '#8B4513');
+  bodyGrad.addColorStop(0.3, '#A0522D');
+  bodyGrad.addColorStop(0.7, '#8B4513');
+  bodyGrad.addColorStop(1, '#654321');
+  ctx.fillStyle = bodyGrad;
+  ctx.beginPath();
+  ctx.roundRect(x - size, y + bobY - size * 0.3, size * 2, size * 1.1, 3);
+  ctx.fill();
+
+  // Lid
+  const lidGrad = ctx.createLinearGradient(x - size, y + bobY - size * 0.8, x + size, y + bobY - size * 0.3);
+  lidGrad.addColorStop(0, '#A0522D');
+  lidGrad.addColorStop(0.5, '#CD853F');
+  lidGrad.addColorStop(1, '#8B4513');
+  ctx.fillStyle = lidGrad;
+  ctx.beginPath();
+  ctx.moveTo(x - size * 1.05, y + bobY - size * 0.3);
+  ctx.lineTo(x - size * 0.8, y + bobY - size * 0.9);
+  ctx.lineTo(x + size * 0.8, y + bobY - size * 0.9);
+  ctx.lineTo(x + size * 1.05, y + bobY - size * 0.3);
+  ctx.closePath();
+  ctx.fill();
+
+  // Metal clasp
+  ctx.fillStyle = '#FFD700';
+  ctx.fillRect(x - size * 0.15, y + bobY - size * 0.5, size * 0.3, size * 0.4);
+  ctx.strokeStyle = '#B8860B';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x - size * 0.15, y + bobY - size * 0.5, size * 0.3, size * 0.4);
+
+  // Keyhole
+  ctx.fillStyle = '#3a2a1a';
+  ctx.beginPath();
+  ctx.arc(x, y + bobY - size * 0.3, size * 0.06, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Sparkles
+  for (let i = 0; i < 3; i++) {
+    const angle = t * 2 + i * 2.1;
+    const dist = size * 1.2 + Math.sin(t * 3 + i) * size * 0.3;
+    const sx = x + Math.cos(angle) * dist;
+    const sy = y + bobY + Math.sin(angle) * dist * 0.5;
+    const sparkAlpha = Math.sin(t * 5 + i * 1.5) * 0.4 + 0.4;
+    ctx.fillStyle = `rgba(255,215,0,${sparkAlpha})`;
+    ctx.beginPath();
+    ctx.arc(sx, sy, 1.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.restore();
+}
+
+// ── Kill Combo Display ──────────────────────────────────
+
+function drawKillCombo(
+  ctx: CanvasRenderingContext2D,
+  combo: number,
+  cw: number,
+  ch: number
+): void {
+  const t = getTime();
+  const scale = 1 + Math.sin(t * 6) * 0.05;
+
+  ctx.save();
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'top';
+
+  const x = cw - 15;
+  const y = 40;
+
+  // Background pill
+  const text = `${combo} KILL`;
+  const fontSize = combo >= 10 ? 16 : 14;
+  ctx.font = `bold ${fontSize}px sans-serif`;
+  const tw = ctx.measureText(text).width + 20;
+
+  ctx.fillStyle = 'rgba(255,50,50,0.3)';
+  ctx.beginPath();
+  ctx.roundRect(x - tw, y - 2, tw, 22, 11);
+  ctx.fill();
+
+  // Text with glow
+  ctx.shadowColor = '#ff4444';
+  ctx.shadowBlur = combo >= 10 ? 12 : 6;
+  ctx.fillStyle = combo >= 10 ? '#ffcc00' : '#ff6644';
+  ctx.fillText(text, x - 8, y + 1);
+  ctx.shadowBlur = 0;
+
+  ctx.restore();
+}
+
+// ── Danger Vignette ─────────────────────────────────────
+
+function drawDangerVignette(ctx: CanvasRenderingContext2D, hpRatio: number): void {
+  const cw = ctx.canvas.width;
+  const ch = ctx.canvas.height;
+  const t = getTime();
+
+  const pulseAlpha = (Math.sin(t * 4) * 0.1 + 0.15) * (1 - hpRatio * 3);
+  const vigGrad = ctx.createRadialGradient(cw / 2, ch / 2, ch * 0.3, cw / 2, ch / 2, ch * 0.7);
+  vigGrad.addColorStop(0, 'rgba(255,0,0,0)');
+  vigGrad.addColorStop(1, `rgba(255,0,0,${Math.max(0, pulseAlpha)})`);
+  ctx.fillStyle = vigGrad;
+  ctx.fillRect(0, 0, cw, ch);
+}
+
+// ── Synergy Indicators ──────────────────────────────────
+
+function drawSynergyIndicators(
+  ctx: CanvasRenderingContext2D,
+  synergies: Map<string, SynergyBonus>,
+  canvasWidth: number
+): void {
+  ctx.save();
+  ctx.textAlign = 'left';
+  ctx.font = 'bold 9px sans-serif';
+
+  let y = 50;
+  const x = 8;
+
+  for (const [id, bonus] of synergies) {
+    // Small indicator pill
+    ctx.fillStyle = 'rgba(100,200,255,0.2)';
+    ctx.beginPath();
+    ctx.roundRect(x, y, 60, 14, 7);
+    ctx.fill();
+
+    ctx.fillStyle = '#88ccff';
+    ctx.textBaseline = 'middle';
+
+    let label = id.replace(/_/g, ' ').split(' ').map(w => w[0]?.toUpperCase()).join('');
+    if (bonus.damageMultiplier) label += ` +${Math.round((bonus.damageMultiplier - 1) * 100)}%`;
+
+    ctx.fillText(label, x + 5, y + 7);
+    y += 18;
+  }
+
+  ctx.restore();
 }
 
 // ── Map Drawing (3D Tiles) ──────────────────────────────────

@@ -12,6 +12,8 @@ interface GameHUDProps {
   wave: number;
   score: number;
   combo: number;
+  killCombo?: number;
+  activeSynergies?: string[];
 }
 
 function AnimatedNumber({ value, className }: { value: number; className?: string }) {
@@ -46,6 +48,8 @@ export default function GameHUD({
   wave,
   score,
   combo,
+  killCombo = 0,
+  activeSynergies = [],
 }: GameHUDProps) {
   const hpPercent = Math.max(0, (hp / maxHp) * 100);
   const isLowHp = hpPercent <= 30;
@@ -117,23 +121,53 @@ export default function GameHUD({
         </div>
       </div>
 
-      {/* Combo Indicator */}
+      {/* Combo & Synergy Bar */}
       <AnimatePresence>
-        {combo > 1 && (
+        {(combo > 1 || killCombo >= 3 || activeSynergies.length > 0) && (
           <motion.div
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             className="overflow-hidden"
           >
-            <div className="flex items-center justify-center gap-1.5 pb-1.5 px-3">
-              <Flame className="w-3.5 h-3.5 text-orange-400" />
-              <span className="text-xs font-bold text-orange-300">
-                {combo} COMBO
-              </span>
-              <span className="text-[10px] text-orange-400/60">
-                x{(1 + combo * 0.1).toFixed(1)}
-              </span>
+            <div className="flex items-center justify-center gap-3 pb-1.5 px-3 flex-wrap">
+              {/* Quiz Combo */}
+              {combo > 1 && (
+                <div className="flex items-center gap-1.5">
+                  <Flame className="w-3.5 h-3.5 text-orange-400" />
+                  <span className="text-xs font-bold text-orange-300">
+                    {combo} COMBO
+                  </span>
+                  <span className="text-[10px] text-orange-400/60">
+                    x{(1 + combo * 0.1).toFixed(1)}
+                  </span>
+                </div>
+              )}
+
+              {/* Kill Streak */}
+              {killCombo >= 3 && (
+                <motion.div
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-500/20 border border-red-500/30"
+                >
+                  <span className="text-[10px] font-bold text-red-300">
+                    {killCombo} KILL
+                  </span>
+                </motion.div>
+              )}
+
+              {/* Active Synergies */}
+              {activeSynergies.map((syn) => (
+                <motion.div
+                  key={syn}
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-cyan-500/15 border border-cyan-500/25"
+                >
+                  <span className="text-[10px] font-bold text-cyan-300">{syn}</span>
+                </motion.div>
+              ))}
             </div>
           </motion.div>
         )}

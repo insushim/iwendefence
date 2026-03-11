@@ -121,6 +121,7 @@ export interface Enemy {
   type: EnemyType;
   hp: number;
   maxHp: number;
+  displayHp: number; // for HP delay bar (lerps toward hp)
   speed: number;
   position: WorldPosition;
   pathIndex: number;

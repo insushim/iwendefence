@@ -128,6 +128,22 @@ const GRADE_GLOW: Record<number, string> = {
   5: 'rgba(255,68,102,0.8)',
 };
 
+// ── Color Blending Helper ────────────────────────────────────
+
+function hexToRgb(hex: string): [number, number, number] {
+  const h = hex.replace('#', '');
+  return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
+}
+
+function blendColor(base: string, tint: string, amount: number): string {
+  const [r1, g1, b1] = hexToRgb(base);
+  const [r2, g2, b2] = hexToRgb(tint);
+  const r = Math.round(r1 + (r2 - r1) * amount);
+  const g = Math.round(g1 + (g2 - g1) * amount);
+  const b = Math.round(b1 + (b2 - b1) * amount);
+  return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+}
+
 // ── Seeded Random for Decorations ────────────────────────────
 
 function seededRandom(seed: number): number {
@@ -296,7 +312,7 @@ export function renderGame(
   }
 
   for (const tower of engine.getTowers()) {
-    drawTower(ctx, tower, cellSize, tower.id === selectedTowerId);
+    drawTower(ctx, tower, cellSize, tower.id === selectedTowerId, engine.getTowerRecoil(tower.id));
   }
 
   // ── Placement Preview (ghost tower + range circle) ──
@@ -931,11 +947,16 @@ export function drawTower(
   ctx: CanvasRenderingContext2D,
   tower: Tower,
   cellSize: number,
-  isSelected: boolean
+  isSelected: boolean,
+  recoil: number = 0
 ): void {
-  const center = getCellCenter(tower.position.row, tower.position.col, cellSize);
+  const rawCenter = getCellCenter(tower.position.row, tower.position.col, cellSize);
+  // Apply recoil: bounce up on attack, scale pulse
+  const recoilOffset = recoil * recoil * 4; // ease-out bounce
+  const recoilScale = 1 + recoil * 0.08; // slight scale-up on fire
+  const center = { x: rawCenter.x, y: rawCenter.y - recoilOffset };
   const pal = TOWER_PALETTE[tower.type] ?? TOWER_PALETTE.ARCHER;
-  const size = cellSize * 0.35;
+  const size = cellSize * 0.35 * recoilScale;
 
   ctx.save();
 
@@ -1565,14 +1586,49 @@ export function drawEnemy(
   enemy: Enemy,
   cellSize: number
 ): void {
-  const { x, y } = enemy.position;
+  const { x: rawX, y: rawY } = enemy.position;
   const isBoss = BOSS_TYPES.has(enemy.type);
   const baseSize = cellSize * 0.25;
   const size = isBoss ? baseSize * 2 : baseSize;
-  const pal = ENEMY_PALETTE[enemy.type] ?? { body: '#cc4444', light: '#ee6666', dark: '#aa2222', eye: '#ffffff' };
+  let pal = ENEMY_PALETTE[enemy.type] ?? { body: '#cc4444', light: '#ee6666', dark: '#aa2222', eye: '#ffffff' };
   const t = getTime();
 
+  // ── Walking bounce ─────────────────────────────────────
+  const speedFactor = enemy.speed > 70 ? 0.5 : enemy.speed > 40 ? 1.5 : 2.5;
+  const bounceY = Math.sin(t * 8 + enemy.pathProgress * 50) * speedFactor;
+  const squashX = 1 + Math.sin(t * 8 + enemy.pathProgress * 50 + Math.PI / 2) * 0.03;
+  const squashY = 1 - Math.sin(t * 8 + enemy.pathProgress * 50 + Math.PI / 2) * 0.03;
+  const x = rawX;
+  const y = rawY + bounceY;
+
+  // ── Status effect body tint ────────────────────────────
+  const hasFreeze = enemy.effects.some(e => e.type === 'freeze' || e.type === 'slow');
+  const hasPoison = enemy.effects.some(e => e.type === 'poison');
+  const hasBurn = enemy.effects.some(e => e.type === 'burn');
+  if (hasFreeze || hasPoison || hasBurn) {
+    pal = { ...pal };
+    if (hasFreeze) {
+      pal.body = blendColor(pal.body, '#66ccff', 0.4);
+      pal.light = blendColor(pal.light, '#aaeeff', 0.3);
+      pal.dark = blendColor(pal.dark, '#3388bb', 0.3);
+    }
+    if (hasPoison) {
+      pal.body = blendColor(pal.body, '#44cc44', 0.35);
+      pal.light = blendColor(pal.light, '#88ee88', 0.25);
+      pal.dark = blendColor(pal.dark, '#228822', 0.25);
+    }
+    if (hasBurn) {
+      pal.body = blendColor(pal.body, '#ff6633', 0.3);
+      pal.light = blendColor(pal.light, '#ffaa66', 0.25);
+      pal.dark = blendColor(pal.dark, '#cc3300', 0.25);
+    }
+  }
+
   ctx.save();
+  // Apply squash & stretch
+  ctx.translate(x, y);
+  ctx.scale(squashX, squashY);
+  ctx.translate(-x, -y);
 
   // Boss outer glow
   if (isBoss) {
@@ -1769,6 +1825,13 @@ export function drawEnemy(
   // Bottom depth
   ctx.fillStyle = 'rgba(0,0,0,0.3)';
   ctx.fillRect(x - barWidth / 2, barY + barHeight, barWidth, 1.5);
+
+  // HP delay bar (white ghost bar showing previous HP)
+  const displayHpRatio = (enemy.displayHp ?? enemy.hp) / enemy.maxHp;
+  if (displayHpRatio > hpRatio) {
+    ctx.fillStyle = 'rgba(255,255,200,0.45)';
+    ctx.fillRect(x - barWidth / 2, barY, barWidth * displayHpRatio, barHeight);
+  }
 
   // HP fill with smooth gradient (green -> yellow -> red)
   if (hpRatio > 0) {

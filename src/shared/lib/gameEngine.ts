@@ -328,6 +328,9 @@ export class GameEngine {
   private lastKillTime: number = 0;
   private static readonly COMBO_TIMEOUT = 2; // seconds
 
+  // ── Tower Recoil Tracking ──────────────────────────────
+  private towerRecoil: Map<string, number> = new Map(); // towerId -> recoil timer (0~1)
+
   // ── Boss Warning ───────────────────────────────────────
   private bossWarningShown: Set<number> = new Set();
 
@@ -613,6 +616,7 @@ export class GameEngine {
       type,
       hp: scaledHp,
       maxHp: scaledHp,
+      displayHp: scaledHp,
       speed: template.speed * this.globalSpeedMultiplier,
       position: { ...startPos.position },
       pathIndex: 0,
@@ -674,6 +678,13 @@ export class GameEngine {
         const result = getPositionOnPath(path, enemy.pathProgress, this.cellSize);
         enemy.position = result.position;
         enemy.pathIndex = result.segmentIndex;
+      }
+
+      // Lerp displayHp toward actual hp (HP delay bar effect)
+      if (enemy.displayHp > enemy.hp) {
+        enemy.displayHp = Math.max(enemy.hp, enemy.displayHp - (enemy.maxHp * dt * 0.8));
+      } else {
+        enemy.displayHp = enemy.hp;
       }
 
       // Check if dead
@@ -878,6 +889,9 @@ export class GameEngine {
       isCrit,
     };
     this.projectiles.push(projectile);
+
+    // Trigger tower recoil animation
+    this.towerRecoil.set(tower.id, 1.0);
 
     // Tower-specific status effects on hit will be applied when projectile lands
   }
@@ -1273,6 +1287,10 @@ export class GameEngine {
     return this.killCombo;
   }
 
+  getTowerRecoil(towerId: string): number {
+    return this.towerRecoil.get(towerId) ?? 0;
+  }
+
   getTotalKills(): number {
     return this.totalKills;
   }
@@ -1310,6 +1328,15 @@ export class GameEngine {
       this.flashOverlay.elapsed += dt;
       if (this.flashOverlay.elapsed >= this.flashOverlay.duration) {
         this.flashOverlay = null;
+      }
+    }
+    // Tower recoil decay
+    for (const [id, val] of this.towerRecoil) {
+      const newVal = val - dt * 8; // decay in ~0.125 seconds
+      if (newVal <= 0) {
+        this.towerRecoil.delete(id);
+      } else {
+        this.towerRecoil.set(id, newVal);
       }
     }
   }
@@ -1481,6 +1508,20 @@ export class GameEngine {
     this.waveKills += 1;
     this.killCombo += 1;
     this.lastKillTime = performance.now() / 1000;
+
+    // Combo shake/flash escalation
+    if (this.killCombo === 5) {
+      this.triggerScreenShake(2, 0.15);
+    } else if (this.killCombo === 10) {
+      this.triggerScreenShake(3, 0.2);
+      this.triggerFlash('#ffcc00', 0.15, 0.15);
+    } else if (this.killCombo === 20) {
+      this.triggerScreenShake(5, 0.3);
+      this.triggerFlash('#ff6600', 0.2, 0.2);
+    } else if (this.killCombo >= 30 && this.killCombo % 10 === 0) {
+      this.triggerScreenShake(6, 0.35);
+      this.triggerFlash('#ff0044', 0.25, 0.25);
+    }
 
     // Combo milestone notifications
     if (this.killCombo > 0 && this.killCombo % 10 === 0) {

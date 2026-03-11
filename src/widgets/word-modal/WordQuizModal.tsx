@@ -178,12 +178,11 @@ export default function WordQuizModal({ isOpen, onClose }: WordQuizModalProps) {
         useGameStore.setState({ quizCombo: 0 });
       }
 
-      // Auto close quickly
+      // Close immediately (minimal delay for visual flash)
+      closingRef.current = true;
       setTimeout(() => {
-        if (closingRef.current) return;
-        closingRef.current = true;
         handleClose();
-      }, correct ? 800 : 600);
+      }, 250);
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [quiz, startTime, updateWordStat]

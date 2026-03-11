@@ -150,6 +150,13 @@ export function useQuizTrigger({ showQuiz, setShowQuiz, isTerminal }: QuizTrigge
   const quizContextRef = useRef<QuizContext>(null);
   const lastQuizTimeRef = useRef<number>(Date.now());
 
+  // Mirror showQuiz as ref to avoid useEffect re-triggers
+  const showQuizRef = useRef(showQuiz);
+  showQuizRef.current = showQuiz;
+
+  // Max 1 quiz per wave change
+  const quizFiredWaveRef = useRef<number>(-1);
+
   // Timer-based (wave start quick quiz)
   const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const elapsedSecondsRef = useRef<number>(0);
@@ -210,29 +217,33 @@ export function useQuizTrigger({ showQuiz, setShowQuiz, isTerminal }: QuizTrigge
     [wordStats],
   );
 
-  // ── Global cooldown check ────────────────────────────────
+  // ── Global cooldown check (uses refs → stable, no re-renders) ──
 
   const canTrigger = useCallback((): boolean => {
-    if (showQuiz || isTerminal) return false;
+    if (showQuizRef.current || isTerminal) return false;
+    // Max 1 quiz per wave transition
+    const currentWave = useGameStore.getState().wave;
+    if (quizFiredWaveRef.current === currentWave) return false;
     const elapsed = Date.now() - lastQuizTimeRef.current;
     return elapsed >= GLOBAL_COOLDOWN_MS;
-  }, [showQuiz, isTerminal]);
+  }, [isTerminal]);
 
   // ── Internal: fire a quiz with context ───────────────────
 
   const fireQuiz = useCallback(
     (quiz: Quiz, context: QuizContext): boolean => {
-      if (showQuiz || isTerminal) return false;
+      if (showQuizRef.current || isTerminal) return false;
 
       quizRef.current = quiz;
       quizContextRef.current = context;
+      quizFiredWaveRef.current = useGameStore.getState().wave;
       useGameStore.getState().startQuiz(quiz);
       lastQuizTimeRef.current = Date.now();
       elapsedSecondsRef.current = 0;
       setShowQuiz(true);
       return true;
     },
-    [showQuiz, isTerminal, setShowQuiz],
+    [isTerminal, setShowQuiz],
   );
 
   // ============================================================
@@ -241,13 +252,13 @@ export function useQuizTrigger({ showQuiz, setShowQuiz, isTerminal }: QuizTrigge
 
   // 0. Manual trigger (backward compat)
   const triggerQuiz = useCallback(() => {
-    if (showQuiz || isGameOver || isTerminal) return;
+    if (showQuizRef.current || isGameOver || isTerminal) return;
 
     const quiz = generateQuiz();
     if (!quiz) return;
 
     fireQuiz(quiz, { type: 'manual' });
-  }, [showQuiz, isGameOver, isTerminal, generateQuiz, fireQuiz]);
+  }, [isGameOver, isTerminal, generateQuiz, fireQuiz]);
 
   // 1. Wave Complete Bonus Quiz
   const triggerWaveBonus = useCallback(() => {
@@ -306,7 +317,7 @@ export function useQuizTrigger({ showQuiz, setShowQuiz, isTerminal }: QuizTrigge
   // 3. Death/Revive Quiz
   const triggerReviveQuiz = useCallback(() => {
     if (reviveUsedRef.current) return;
-    if (showQuiz || isTerminal) return;
+    if (showQuizRef.current || isTerminal) return;
 
     const quiz = generateQuiz(pickQuizType(2));
     if (!quiz) return;
@@ -322,7 +333,7 @@ export function useQuizTrigger({ showQuiz, setShowQuiz, isTerminal }: QuizTrigge
 
     // Don't mark reviveUsed yet - only on success (handled by consumer)
     fireQuiz(quiz, { type: 'revive' });
-  }, [showQuiz, isTerminal, generateQuiz, fireQuiz]);
+  }, [isTerminal, generateQuiz, fireQuiz]);
 
   // 4. Free Tower Quiz
   const triggerFreeTowerQuiz = useCallback(() => {
@@ -399,7 +410,7 @@ export function useQuizTrigger({ showQuiz, setShowQuiz, isTerminal }: QuizTrigge
   // 7. Double Speed Quiz
   const triggerSpeedQuiz = useCallback(() => {
     if (speedUnlockedRef.current) return;
-    if (showQuiz || isTerminal) return;
+    if (showQuizRef.current || isTerminal) return;
 
     const quiz = generateQuiz(pickQuizType(1));
     if (!quiz) return;
@@ -413,7 +424,7 @@ export function useQuizTrigger({ showQuiz, setShowQuiz, isTerminal }: QuizTrigge
     };
 
     fireQuiz(quiz, { type: 'speed_unlock' });
-  }, [showQuiz, isTerminal, generateQuiz, fireQuiz]);
+  }, [isTerminal, generateQuiz, fireQuiz]);
 
   // 8. Streak Bonus Quiz
   const triggerStreakBonus = useCallback(() => {
@@ -473,8 +484,9 @@ export function useQuizTrigger({ showQuiz, setShowQuiz, isTerminal }: QuizTrigge
   // ============================================================
 
   // ── Boss wave: auto-trigger before every 5th wave ────────
+  // NOTE: showQuiz intentionally NOT in deps to prevent re-trigger on quiz close
   useEffect(() => {
-    if (isGameOver || isTerminal || showQuiz) return;
+    if (isGameOver || isTerminal) return;
 
     const isBossWave = wave > 0 && wave % 5 === 0;
     if (isBossWave && lastBossWaveQuizRef.current !== wave) {
@@ -483,11 +495,12 @@ export function useQuizTrigger({ showQuiz, setShowQuiz, isTerminal }: QuizTrigge
       }, 500);
       return () => clearTimeout(timer);
     }
-  }, [wave, isGameOver, isTerminal, showQuiz, triggerBossQuiz]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wave, isGameOver, isTerminal]);
 
   // ── Wave complete: offer bonus quiz (40% chance) ─────────
   useEffect(() => {
-    if (isGameOver || isTerminal || showQuiz) return;
+    if (isGameOver || isTerminal) return;
     if (wave <= 0) return;
 
     // Skip if this is a boss wave (boss quiz takes priority)
@@ -500,11 +513,12 @@ export function useQuizTrigger({ showQuiz, setShowQuiz, isTerminal }: QuizTrigge
       }, 1000);
       return () => clearTimeout(timer);
     }
-  }, [wave, isGameOver, isTerminal, showQuiz, triggerWaveBonus]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wave, isGameOver, isTerminal]);
 
   // ── Free tower: offer every 3 waves ──────────────────────
   useEffect(() => {
-    if (isGameOver || isTerminal || showQuiz) return;
+    if (isGameOver || isTerminal) return;
     if (wave <= 0 || wave % FREE_TOWER_WAVE_INTERVAL !== 0) return;
     // Don't overlap with boss wave trigger
     if (wave % 5 === 0) return;
@@ -516,11 +530,12 @@ export function useQuizTrigger({ showQuiz, setShowQuiz, isTerminal }: QuizTrigge
       }, 3000);
       return () => clearTimeout(timer);
     }
-  }, [wave, isGameOver, isTerminal, showQuiz, triggerFreeTowerQuiz]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wave, isGameOver, isTerminal]);
 
   // ── Treasure chest: 1 per 3 waves ───────────────────────
   useEffect(() => {
-    if (isGameOver || isTerminal || showQuiz) return;
+    if (isGameOver || isTerminal) return;
     if (wave <= 0 || wave % TREASURE_WAVE_INTERVAL !== 0) return;
     // Offset from free tower to prevent collision
     if (wave % FREE_TOWER_WAVE_INTERVAL === 0 && wave % 5 !== 0) return;
@@ -532,11 +547,12 @@ export function useQuizTrigger({ showQuiz, setShowQuiz, isTerminal }: QuizTrigge
       }, 4000);
       return () => clearTimeout(timer);
     }
-  }, [wave, isGameOver, isTerminal, showQuiz, triggerTreasureQuiz]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wave, isGameOver, isTerminal]);
 
   // ── Crisis: HP drops below 25% ──────────────────────────
   useEffect(() => {
-    if (isGameOver || isTerminal || showQuiz) return;
+    if (isGameOver || isTerminal) return;
 
     const hpPercent = maxHp > 0 ? hp / maxHp : 1;
 
@@ -548,24 +564,27 @@ export function useQuizTrigger({ showQuiz, setShowQuiz, isTerminal }: QuizTrigge
     if (hpPercent >= CRISIS_RESET_THRESHOLD) {
       crisisTriggeredRef.current = false;
     }
-  }, [hp, maxHp, isGameOver, isTerminal, showQuiz, triggerCrisisQuiz]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hp, maxHp, isGameOver, isTerminal]);
 
   // ── Revive: auto-offer on game over ──────────────────────
   useEffect(() => {
-    if (!isGameOver || isTerminal || showQuiz) return;
+    if (!isGameOver || isTerminal) return;
     if (reviveUsedRef.current) return;
+    if (showQuizRef.current) return;
 
     // Short delay so the game over state is visible briefly
     const timer = setTimeout(() => {
       triggerReviveQuiz();
     }, 800);
     return () => clearTimeout(timer);
-  }, [isGameOver, isTerminal, showQuiz, triggerReviveQuiz]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isGameOver, isTerminal]);
 
   // ── Speed unlock: first time going to 3x ─────────────────
   useEffect(() => {
     if (speedUnlockedRef.current) return;
-    if (isGameOver || isTerminal || showQuiz) return;
+    if (isGameOver || isTerminal) return;
 
     if (speed === 3) {
       // Revert speed to 2x temporarily, then offer quiz
@@ -575,11 +594,12 @@ export function useQuizTrigger({ showQuiz, setShowQuiz, isTerminal }: QuizTrigge
       }, 300);
       return () => clearTimeout(timer);
     }
-  }, [speed, isGameOver, isTerminal, showQuiz, triggerSpeedQuiz]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [speed, isGameOver, isTerminal]);
 
   // ── Streak bonus: every 5 quiz combo ──────────────────────
   useEffect(() => {
-    if (isGameOver || isTerminal || showQuiz) return;
+    if (isGameOver || isTerminal) return;
     if (quizCombo <= 0) return;
 
     if (
@@ -591,7 +611,8 @@ export function useQuizTrigger({ showQuiz, setShowQuiz, isTerminal }: QuizTrigge
       }, 1500);
       return () => clearTimeout(timer);
     }
-  }, [quizCombo, isGameOver, isTerminal, showQuiz, triggerStreakBonus]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quizCombo, isGameOver, isTerminal]);
 
   // ── Wave start quick quiz (between waves countdown) ──────
   useEffect(() => {
@@ -601,14 +622,16 @@ export function useQuizTrigger({ showQuiz, setShowQuiz, isTerminal }: QuizTrigge
       timerIntervalRef.current = null;
     }
 
-    // Don't run timer if game is paused, over, terminal, or quiz is showing
-    if (isPaused || isGameOver || isTerminal || showQuiz) return;
+    // Don't run timer if game is paused, over, or terminal
+    if (isPaused || isGameOver || isTerminal) return;
 
     timerIntervalRef.current = setInterval(() => {
+      // Check ref at call time (not closure)
+      if (showQuizRef.current) return;
       elapsedSecondsRef.current += 1;
 
-      // Every 30 seconds of active gameplay, offer a quick quiz
-      if (elapsedSecondsRef.current >= 30) {
+      // Every 45 seconds of active gameplay, offer a quick quiz
+      if (elapsedSecondsRef.current >= 45) {
         const timeSinceLastQuiz = Date.now() - lastQuizTimeRef.current;
         if (timeSinceLastQuiz < GLOBAL_COOLDOWN_MS) return;
 
@@ -622,7 +645,8 @@ export function useQuizTrigger({ showQuiz, setShowQuiz, isTerminal }: QuizTrigge
         timerIntervalRef.current = null;
       }
     };
-  }, [isPaused, isGameOver, isTerminal, showQuiz, triggerQuickQuiz]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPaused, isGameOver, isTerminal]);
 
   // ── Reset all refs when game resets (wave goes to 0) ─────
   useEffect(() => {
@@ -638,6 +662,7 @@ export function useQuizTrigger({ showQuiz, setShowQuiz, isTerminal }: QuizTrigge
       speedUnlockedRef.current = false;
       lastStreakBonusCombosRef.current = 0;
       lastQuickQuizWaveRef.current = 0;
+      quizFiredWaveRef.current = -1;
       elapsedSecondsRef.current = 0;
       quizRef.current = null;
       quizContextRef.current = null;

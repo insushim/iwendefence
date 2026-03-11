@@ -12,7 +12,7 @@ import {
   Trophy,
   Swords,
 } from 'lucide-react';
-import Link from 'next/link';
+
 import { useGameStore, usePlayerStore } from '@/shared/lib/store';
 import { useGameLoop } from '@/shared/hooks/useGameLoop';
 import { useQuizTrigger } from '@/shared/hooks/useQuizTrigger';
@@ -444,11 +444,11 @@ export default function EndlessPage() {
       {/* Control Bar */}
       <div className="bg-slate-900/90 backdrop-blur-xl border-t border-slate-700/50 safe-area-pb">
         <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-800/50">
-          <Link href="/">
+          <a href="/">
             <div className="w-9 h-9 rounded-xl bg-slate-800 flex items-center justify-center active:bg-slate-700">
               <ArrowLeft className="w-4 h-4 text-slate-400" />
             </div>
-          </Link>
+          </a>
 
           <motion.button
             whileTap={{ scale: 0.9 }}
@@ -572,11 +572,11 @@ export default function EndlessPage() {
           </div>
 
           <div className="flex gap-3">
-            <Link href="/" className="flex-1">
+            <a href="/" className="flex-1">
               <Button variant="ghost" fullWidth>
                 나가기
               </Button>
-            </Link>
+            </a>
             <Button
               variant="danger"
               fullWidth

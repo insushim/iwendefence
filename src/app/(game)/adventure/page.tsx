@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, Lock, Star, ChevronRight, Sparkles } from 'lucide-react';
-import Link from 'next/link';
+
 import { usePlayerStore } from '@/shared/lib/store';
 
 const WORLDS = [
@@ -50,7 +50,7 @@ export default function AdventurePage() {
       {/* Header */}
       <div className="relative z-10 sticky top-0 bg-[#0F172A]/80 backdrop-blur-xl border-b border-slate-800/50">
         <div className="flex items-center gap-3 px-4 py-3 max-w-lg mx-auto">
-          <Link href="/">
+          <a href="/">
             <motion.div
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
@@ -58,7 +58,7 @@ export default function AdventurePage() {
             >
               <ArrowLeft className="w-5 h-5 text-slate-400" />
             </motion.div>
-          </Link>
+          </a>
           <div>
             <h1 className="text-lg font-bold text-white">모험 모드</h1>
             <p className="text-xs text-slate-500">월드를 선택하세요</p>
@@ -177,7 +177,7 @@ export default function AdventurePage() {
                                 }}
                               >
                                 {unlocked ? (
-                                  <Link
+                                  <a
                                     href={`/play?world=${world.id}&stage=${stageId}`}
                                   >
                                     <div
@@ -211,7 +211,7 @@ export default function AdventurePage() {
                                         </span>
                                       )}
                                     </div>
-                                  </Link>
+                                  </a>
                                 ) : (
                                   <div className="aspect-square rounded-xl bg-slate-800/30 flex items-center justify-center">
                                     <Lock className="w-4 h-4 text-slate-600" />

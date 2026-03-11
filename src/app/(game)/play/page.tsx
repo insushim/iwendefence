@@ -11,7 +11,7 @@ import {
   Swords,
   Heart,
 } from 'lucide-react';
-import Link from 'next/link';
+
 import { useSearchParams } from 'next/navigation';
 import { useGameStore, usePlayerStore } from '@/shared/lib/store';
 import { useGameLoop } from '@/shared/hooks/useGameLoop';
@@ -441,11 +441,11 @@ function PlayPageContent() {
       {/* Control Bar */}
       <div className="bg-slate-900/90 backdrop-blur-xl border-t border-slate-700/50 safe-area-pb">
         <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-800/50">
-          <Link href="/adventure">
+          <a href="/adventure">
             <div className="w-9 h-9 rounded-xl bg-slate-800 flex items-center justify-center active:bg-slate-700">
               <ArrowLeft className="w-4 h-4 text-slate-400" />
             </div>
-          </Link>
+          </a>
 
           <motion.button
             whileTap={{ scale: 0.9 }}
@@ -564,39 +564,29 @@ function PlayPageContent() {
           </div>
 
           <div className="flex gap-3">
-            <Link href="/adventure" className="flex-1">
+            <a href="/adventure" className="flex-1">
               <Button variant="ghost" fullWidth>
                 나가기
               </Button>
-            </Link>
+            </a>
             {stageId < 10 ? (
-              <Link
+              <a
                 href={`/play?world=${worldId}&stage=${stageId + 1}`}
                 className="flex-1"
-                onClick={() => {
-                  reset();
-                  setShowStageClear(false);
-                  stageLoadedRef.current = false;
-                }}
               >
                 <Button variant="primary" fullWidth>
                   다음 스테이지
                 </Button>
-              </Link>
+              </a>
             ) : worldId < 10 ? (
-              <Link
+              <a
                 href={`/play?world=${worldId + 1}&stage=1`}
                 className="flex-1"
-                onClick={() => {
-                  reset();
-                  setShowStageClear(false);
-                  stageLoadedRef.current = false;
-                }}
               >
                 <Button variant="primary" fullWidth>
                   다음 월드
                 </Button>
-              </Link>
+              </a>
             ) : (
               <Button
                 variant="primary"
@@ -768,11 +758,11 @@ function PlayPageContent() {
           </div>
 
           <div className="flex gap-3">
-            <Link href="/adventure" className="flex-1">
+            <a href="/adventure" className="flex-1">
               <Button variant="ghost" fullWidth>
                 나가기
               </Button>
-            </Link>
+            </a>
             <Button
               variant="danger"
               fullWidth

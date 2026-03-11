@@ -12,7 +12,7 @@ import {
   ChevronDown,
   Shield,
 } from 'lucide-react';
-import Link from 'next/link';
+
 import { useSettingsStore } from '@/shared/lib/store';
 import type { WordGrade } from '@/shared/types/game';
 
@@ -228,7 +228,7 @@ export default function HomePage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1 + index * 0.05, duration: 0.4 }}
             >
-              <Link href={item.href}>
+              <a href={item.href}>
                 <motion.div
                   whileHover={{ scale: 1.03 }}
                   whileTap={{ scale: 0.97 }}
@@ -258,7 +258,7 @@ export default function HomePage() {
                     </p>
                   </div>
                 </motion.div>
-              </Link>
+              </a>
             </motion.div>
           ))}
         </div>

@@ -17,6 +17,12 @@ export enum TowerType {
   SNIPER = 'SNIPER',
   FLAME = 'FLAME',
   WORD = 'WORD',
+  // Legendary (random-only)
+  METEOR = 'METEOR',
+  VOID = 'VOID',
+  PHOENIX = 'PHOENIX',
+  CHRONO = 'CHRONO',
+  DIVINE = 'DIVINE',
 }
 
 export enum TowerGrade {
@@ -128,6 +134,9 @@ export interface Enemy {
   pathProgress: number;
   effects: EnemyEffect[];
   rewards: EnemyReward;
+  isSplit?: boolean;    // true for split-spawned mini enemies (won't split again)
+  spawnTime?: number;   // timestamp (seconds) when enemy was spawned
+  isRaging?: boolean;   // true when enemy is in rage mode (last 3 alive)
 }
 
 // ── Hero ─────────────────────────────────────────────────────

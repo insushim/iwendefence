@@ -80,13 +80,14 @@ const STREAK_BONUS_INTERVAL = 5;
 
 /** Pick quiz type based on desired difficulty tier (1-3) */
 function pickQuizType(difficulty: 1 | 2 | 3): QuizType {
+  // Only kr2en and en2kr are supported by the quiz modal UI
   const tiers: Record<1 | 2 | 3, QuizType[]> = {
     1: ['kr2en', 'en2kr'],
-    2: ['kr2en', 'en2kr', 'listening', 'spelling'],
-    3: ['spelling', 'sentence', 'combo'],
+    2: ['kr2en', 'en2kr', 'kr2en', 'en2kr'],
+    3: ['kr2en', 'en2kr', 'kr2en', 'en2kr'],
   };
-  const pool = tiers[difficulty];
-  return pool[Math.floor(Math.random() * pool.length)];
+  const types = tiers[difficulty];
+  return types[Math.floor(Math.random() * types.length)];
 }
 
 /** Quick quiz uses simpler types with shorter time */
@@ -99,11 +100,15 @@ function generateQuickQuiz(
   const quiz = generateFn(type, wordStats);
   if (!quiz) return null;
 
-  // Quick quiz: 5 second limit, only 2 options
+  // Quick quiz: 5 second limit, only 2 options (always include correct answer)
+  const isEng = type === 'kr2en';
+  const correct = isEng ? quiz.word.english : quiz.word.korean;
+  const wrong = quiz.options.filter((o) => o !== correct);
+  const picked = [correct, wrong[0] ?? quiz.options[0]];
   return {
     ...quiz,
     timeLimit: 5,
-    options: quiz.options.slice(0, 2).sort(() => Math.random() - 0.5),
+    options: picked.sort(() => Math.random() - 0.5),
   };
 }
 

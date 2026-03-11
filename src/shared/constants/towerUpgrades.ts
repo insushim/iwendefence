@@ -79,6 +79,11 @@ const BASE_COSTS: Record<TowerType, number> = {
   [TowerType.SNIPER]: 70,
   [TowerType.FLAME]: 55,
   [TowerType.WORD]: 60,
+  [TowerType.METEOR]: 80,
+  [TowerType.VOID]: 90,
+  [TowerType.PHOENIX]: 100,
+  [TowerType.CHRONO]: 90,
+  [TowerType.DIVINE]: 120,
 };
 
 function tierCost(tower: TowerType, tier: 1 | 2 | 3 | 4 | 5): number {

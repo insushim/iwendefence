@@ -570,13 +570,16 @@ export const useWordStore = create<WordStore>()(
       for (const w of shuffled) {
         if (distractors.length >= 3) break;
         const candidate = isEnglishAnswer ? w.english : w.korean;
-        if (!distractors.includes(candidate)) {
+        if (candidate && candidate !== correctAnswer && !distractors.includes(candidate)) {
           distractors.push(candidate);
         }
       }
 
-      // Combine and shuffle options
+      // Ensure exactly 4 options with correct answer always included
       const options = [correctAnswer, ...distractors].sort(() => Math.random() - 0.5);
+      if (!options.includes(correctAnswer)) {
+        options[0] = correctAnswer;
+      }
 
       // Time limits per quiz type
       const timeLimits: Record<QuizType, number> = {

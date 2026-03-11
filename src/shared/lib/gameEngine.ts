@@ -110,6 +110,11 @@ const TOWER_ELEMENT: Record<TowerType, TowerElement> = {
   SNIPER: 'physical',
   FLAME: 'fire',
   WORD: 'magic',
+  METEOR: 'fire',
+  VOID: 'poison',
+  PHOENIX: 'fire',
+  CHRONO: 'ice',
+  DIVINE: 'holy',
 };
 
 // Mapping tower types to projectile speed (pixels/sec)
@@ -126,6 +131,11 @@ const PROJECTILE_SPEED: Record<TowerType, number> = {
   SNIPER: 900,
   FLAME: 500,
   WORD: 450,
+  METEOR: 200,
+  VOID: 0,
+  PHOENIX: 350,
+  CHRONO: 0,
+  DIVINE: 0,
 };
 
 // AOE radius in pixels (0 = single target)
@@ -142,6 +152,11 @@ const TOWER_AOE: Record<TowerType, number> = {
   SNIPER: 0,
   FLAME: 45,
   WORD: 35,
+  METEOR: 80,
+  VOID: 60,
+  PHOENIX: 70,
+  CHRONO: 0,
+  DIVINE: 0,
 };
 
 // Enemy type categories for element interaction
@@ -337,6 +352,12 @@ export class GameEngine {
   // ── Invincibility ──────────────────────────────────────
   private invincibleTimer: number = 0;
 
+  // ── Perfect Wave Tracking ──────────────────────────────
+  private wavePerfect: boolean = true;
+
+  // ── Game Time (for fast-kill tracking) ─────────────────
+  private gameTime: number = 0;
+
   constructor(callbacks: GameEngineCallbacks) {
     this.callbacks = callbacks;
   }
@@ -388,6 +409,8 @@ export class GameEngine {
     this.allWavesDone = false;
     this.currentWaveIndex = -1;
     this.isGameOver = false;
+    this.wavePerfect = true;
+    this.gameTime = 0;
   }
 
   /**
@@ -502,6 +525,35 @@ export class GameEngine {
       allSpawned: false,
     };
     this.waveActive = true;
+    this.wavePerfect = true;
+
+    // ── Gold Interest (BTD6-style) ───────────────────────
+    // Award 5% interest on current gold, capped at 100
+    if (nextIndex > 0) {
+      const interest = Math.min(100, Math.floor(this.gold * 0.05));
+      if (interest > 0) {
+        this.gold += interest;
+        this.callbacks.onGoldEarned(interest);
+
+        // Show interest text at map center
+        const centerX = this.mapData
+          ? (this.mapData.grid[0]?.length ?? 10) * this.cellSize / 2
+          : 300;
+        const centerY = this.mapData
+          ? (this.mapData.grid.length ?? 8) * this.cellSize / 2
+          : 200;
+        this.damageTexts.push({
+          id: nextId('dt'),
+          text: `Interest +${interest}`,
+          position: { x: centerX, y: centerY + 30 },
+          color: '#44ddff',
+          elapsed: 0,
+          duration: 1.8,
+          isCrit: false,
+        });
+      }
+    }
+
     return nextIndex;
   }
 
@@ -543,6 +595,7 @@ export class GameEngine {
       }
     }
 
+    this.gameTime += effectiveDt;
     this.updateWaveSpawning(effectiveDt);
     this.updateEnemies(effectiveDt);
     this.updateTowers(effectiveDt);
@@ -591,12 +644,12 @@ export class GameEngine {
           return;
         }
 
-        // Use the next group's delay
+        // Use the next group's delay (delay is already in seconds)
         const nextGroup = wave.enemies[this.waveSpawn.enemyGroupIndex];
-        this.waveSpawn.spawnTimer = nextGroup ? nextGroup.delay / 1000 : 0.5;
+        this.waveSpawn.spawnTimer = nextGroup ? nextGroup.delay : 0.5;
       } else {
-        // Delay between enemies in the same group
-        this.waveSpawn.spawnTimer = group.delay / 1000;
+        // Delay between enemies in the same group (delay is already in seconds)
+        this.waveSpawn.spawnTimer = group.delay;
       }
     }
   }
@@ -626,9 +679,42 @@ export class GameEngine {
         gold: Math.round(template.gold * waveScaling),
         exp: Math.round(template.exp * waveScaling),
       },
+      spawnTime: this.gameTime,
     };
 
     this.enemies.push(enemy);
+  }
+
+  // ── Split Enemy Spawning ────────────────────────────────
+
+  private spawnSplitEnemies(parent: Enemy, count: number, hpRatio: number, speedRatio: number): void {
+    if (!this.mapData) return;
+
+    for (let i = 0; i < count; i++) {
+      const splitHp = Math.max(1, Math.round(parent.maxHp * hpRatio));
+      const splitEnemy: Enemy = {
+        id: nextId('e'),
+        type: parent.type,
+        hp: splitHp,
+        maxHp: splitHp,
+        displayHp: splitHp,
+        speed: parent.speed * speedRatio,
+        position: {
+          x: parent.position.x + (Math.random() - 0.5) * 15,
+          y: parent.position.y + (Math.random() - 0.5) * 15,
+        },
+        pathIndex: parent.pathIndex,
+        pathProgress: parent.pathProgress,
+        effects: [],
+        rewards: {
+          gold: Math.round(parent.rewards.gold * hpRatio),
+          exp: Math.round(parent.rewards.exp * hpRatio),
+        },
+        isSplit: true,
+        spawnTime: this.gameTime,
+      };
+      this.enemies.push(splitEnemy);
+    }
   }
 
   // ── Enemy Movement ────────────────────────────────────────
@@ -638,6 +724,17 @@ export class GameEngine {
 
     const path = this.mapData.path;
     const toRemove: string[] = [];
+
+    // ── Enemy Rage Mode: last 3 enemies get speed boost ──
+    const aliveCount = this.enemies.filter(e => e.hp > 0).length;
+    const rageActive = this.waveActive && this.waveSpawn.allSpawned && aliveCount > 0 && aliveCount <= 3;
+    for (const enemy of this.enemies) {
+      if (rageActive && !enemy.isRaging) {
+        enemy.isRaging = true;
+        // Permanent 40% speed boost — applied once
+        enemy.speed *= 1.4;
+      }
+    }
 
     for (const enemy of this.enemies) {
       // Apply status effects
@@ -662,6 +759,8 @@ export class GameEngine {
         if (enemy.pathProgress >= 1) {
           // Enemy reached the end — deal damage to player
           toRemove.push(enemy.id);
+          // Mark wave as imperfect (enemy leaked)
+          this.wavePerfect = false;
           if (!this.isInvincible()) {
             const dmg = BOSS_TYPES.has(enemy.type) ? 5 : 1;
             this.hp = Math.max(0, this.hp - dmg);
@@ -752,7 +851,7 @@ export class GameEngine {
 
     for (const tower of this.towers) {
       // Skip non-attacking towers
-      if (tower.type === 'BARRICADE' || tower.type === 'GOLDMINE' || tower.type === 'HEALER') {
+      if (tower.type === 'GOLDMINE' || tower.type === 'HEALER') {
         continue;
       }
 
@@ -762,6 +861,52 @@ export class GameEngine {
       this.towerCooldowns.set(tower.id, newCd);
 
       if (newCd > 0) continue;
+
+      // ── BARRICADE: area slow aura (no projectile) ──
+      if (tower.type === 'BARRICADE') {
+        const towerCenter = getCellCenter(tower.position.row, tower.position.col, this.cellSize);
+        const rangePixels = tower.stats.range * this.cellSize;
+        const enemiesInRange = this.enemies.filter((e) =>
+          isInRange(tower.position, e.position, tower.stats.range, this.cellSize)
+        );
+
+        if (enemiesInRange.length > 0) {
+          for (const enemy of enemiesInRange) {
+            // Apply slow effect: 30% base + 5% per grade
+            this.addStatusEffect(enemy.id, {
+              type: 'slow',
+              value: 0.3 + tower.grade * 0.05,
+              duration: 1.5,
+              sourceId: tower.id,
+            });
+
+            // Small damage
+            const dmg = Math.round(tower.stats.damage * (1 + (tower.level - 1) * 0.15 + tower.mergeCount * 0.5) * this.globalDamageMultiplier);
+            if (dmg > 0) {
+              this.applyDamage(enemy, dmg, tower, false);
+            }
+          }
+
+          // Visual effect at barricade position
+          this.effects.push({
+            id: nextId('fx'),
+            type: 'ice',
+            position: { ...towerCenter },
+            radius: rangePixels * 0.5,
+            duration: 0.4,
+            elapsed: 0,
+            color: '#a78bfa',
+          });
+
+          // Tower recoil animation
+          this.towerRecoil.set(tower.id, 1.0);
+        }
+
+        // Reset cooldown
+        const attackInterval = tower.stats.attackSpeed > 0 ? 1 / tower.stats.attackSpeed : 1;
+        this.towerCooldowns.set(tower.id, attackInterval);
+        continue;
+      }
 
       // Find target
       const target = this.findTarget(tower);
@@ -1157,6 +1302,34 @@ export class GameEngine {
 
     if (this.waveSpawn.allSpawned && this.enemies.length === 0) {
       this.waveActive = false;
+
+      // ── Perfect Wave Bonus ─────────────────────────────
+      if (this.wavePerfect && this.currentWaveIndex >= 0) {
+        const bonusGold = Math.floor(20 + this.currentWaveIndex * 5);
+        this.gold += bonusGold;
+        this.callbacks.onGoldEarned(bonusGold);
+
+        // Show "PERFECT!" text at map center
+        const centerX = this.mapData
+          ? (this.mapData.grid[0]?.length ?? 10) * this.cellSize / 2
+          : 300;
+        const centerY = this.mapData
+          ? (this.mapData.grid.length ?? 8) * this.cellSize / 2
+          : 200;
+        this.damageTexts.push({
+          id: nextId('dt'),
+          text: `PERFECT! +${bonusGold} Gold`,
+          position: { x: centerX, y: centerY },
+          color: '#ffdd00',
+          elapsed: 0,
+          duration: 2.0,
+          isCrit: true, // renders larger/bolder
+        });
+
+        // Celebratory flash
+        this.triggerFlash('#ffdd00', 0.15, 0.25);
+      }
+
       this.waveKills = 0;
       this.callbacks.onWaveComplete(this.currentWaveIndex);
 
@@ -1297,6 +1470,14 @@ export class GameEngine {
 
   getActiveSynergies(): Map<string, SynergyBonus> {
     return this.activeSynergies;
+  }
+
+  getWavePerfect(): boolean {
+    return this.wavePerfect;
+  }
+
+  getGameTime(): number {
+    return this.gameTime;
   }
 
   // ════════════════════════════════════════════════════════════
@@ -1499,9 +1680,40 @@ export class GameEngine {
   // ── Enhanced Enemy Death ──────────────────────────────
 
   private onEnemyDeath(enemy: Enemy): void {
-    const goldReward = Math.round(enemy.rewards.gold * this.goldMultiplier);
+    // ── Fast Kill Bonus: 50% more gold if killed within 2s of spawn ──
+    let fastKillBonus = 0;
+    if (enemy.spawnTime !== undefined && (this.gameTime - enemy.spawnTime) < 2) {
+      fastKillBonus = Math.round(enemy.rewards.gold * this.goldMultiplier * 0.5);
+    }
+
+    const goldReward = Math.round(enemy.rewards.gold * this.goldMultiplier) + fastKillBonus;
     this.gold += goldReward;
     this.score += enemy.rewards.exp * 10;
+
+    // Fast kill text
+    if (fastKillBonus > 0) {
+      this.damageTexts.push({
+        id: nextId('dt'),
+        text: `FAST! +${fastKillBonus}g`,
+        position: {
+          x: enemy.position.x + 15,
+          y: enemy.position.y - 25,
+        },
+        color: '#ff8800',
+        elapsed: 0,
+        duration: 1.2,
+        isCrit: false,
+      });
+    }
+
+    // ── Enemy Split on Death ─────────────────────────────
+    if (!enemy.isSplit) {
+      if (enemy.type === 'SLIME') {
+        this.spawnSplitEnemies(enemy, 2, 0.3, 0.7);
+      } else if (enemy.type === 'GOLEM') {
+        this.spawnSplitEnemies(enemy, 3, 0.2, 0.8);
+      }
+    }
 
     // Kill combo
     this.totalKills += 1;

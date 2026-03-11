@@ -24,7 +24,25 @@ import WordQuizModal from '@/widgets/word-modal/WordQuizModal';
 import Button from '@/shared/ui/Button';
 import Modal from '@/shared/ui/Modal';
 
-const towerList = Object.values(TOWER_DEFINITIONS);
+// ── Random Tower System ───────────────────────────────────────
+const LEGENDARY_TYPES = new Set([TowerType.METEOR, TowerType.VOID, TowerType.PHOENIX, TowerType.CHRONO, TowerType.DIVINE]);
+const BASIC_TYPES = [TowerType.ARCHER, TowerType.ICE, TowerType.POISON, TowerType.BARRICADE];
+const ADVANCED_TYPES = [TowerType.MAGIC, TowerType.CANNON, TowerType.LIGHTNING, TowerType.SNIPER, TowerType.FLAME, TowerType.HEALER, TowerType.GOLDMINE, TowerType.WORD];
+const LEGENDARY_LIST = [TowerType.METEOR, TowerType.VOID, TowerType.PHOENIX, TowerType.CHRONO, TowerType.DIVINE];
+const RANDOM_TOWER_COST = 80;
+
+function rollRandomTower(): TowerType {
+  const roll = Math.random();
+  if (roll < 0.70) {
+    return BASIC_TYPES[Math.floor(Math.random() * BASIC_TYPES.length)];
+  } else if (roll < 0.95) {
+    return ADVANCED_TYPES[Math.floor(Math.random() * ADVANCED_TYPES.length)];
+  } else {
+    return LEGENDARY_LIST[Math.floor(Math.random() * LEGENDARY_LIST.length)];
+  }
+}
+
+const towerList = Object.values(TOWER_DEFINITIONS).filter(t => !LEGENDARY_TYPES.has(t.type));
 
 // All enemy types for procedural wave generation
 const NORMAL_ENEMIES: EnemyType[] = [
@@ -46,24 +64,24 @@ function generateEndlessWave(waveIndex: number): Wave {
   if (isBoss) {
     const normalType = NORMAL_ENEMIES[waveIndex % NORMAL_ENEMIES.length];
     const normalCount = 5 + Math.floor(waveIndex * 0.8);
-    enemies.push({ type: normalType, count: normalCount, delay: 800 });
+    enemies.push({ type: normalType, count: normalCount, delay: 0.8 });
     const bossType = BOSS_ENEMIES[Math.floor(waveIndex / 5) % BOSS_ENEMIES.length];
-    enemies.push({ type: bossType, count: 1, delay: 2000 });
+    enemies.push({ type: bossType, count: 1, delay: 2.0 });
   } else if ((waveIndex + 1) % 3 === 0) {
     const normalType = NORMAL_ENEMIES[waveIndex % NORMAL_ENEMIES.length];
     const eliteType = ELITE_ENEMIES[waveIndex % ELITE_ENEMIES.length];
     const normalCount = 5 + Math.floor(waveIndex * 0.5);
     const eliteCount = 1 + Math.floor(waveIndex / 4);
-    enemies.push({ type: normalType, count: normalCount, delay: 800 });
-    enemies.push({ type: eliteType, count: eliteCount, delay: 1200 });
+    enemies.push({ type: normalType, count: normalCount, delay: 0.8 });
+    enemies.push({ type: eliteType, count: eliteCount, delay: 1.2 });
   } else {
     const type1 = NORMAL_ENEMIES[waveIndex % NORMAL_ENEMIES.length];
     const type2 = NORMAL_ENEMIES[(waveIndex + 1) % NORMAL_ENEMIES.length];
     const count1 = 6 + Math.floor(waveIndex * 0.6);
     const count2 = 2 + Math.floor(waveIndex * 0.3);
-    enemies.push({ type: type1, count: count1, delay: 800 });
+    enemies.push({ type: type1, count: count1, delay: 0.8 });
     if (waveIndex > 1) {
-      enemies.push({ type: type2, count: count2, delay: 1000 });
+      enemies.push({ type: type2, count: count2, delay: 1.0 });
     }
   }
 
@@ -101,6 +119,8 @@ export default function EndlessPage() {
   const endlessHighScore = highScores['endless'] ?? 0;
 
   const [selectedTower, setSelectedTower] = useState<TowerType | null>(null);
+  const [isRandomTower, setIsRandomTower] = useState(false);
+  const [randomTowerNotif, setRandomTowerNotif] = useState<{ name: string; icon: string; isLegendary: boolean } | null>(null);
   const [showGameOver, setShowGameOver] = useState(false);
   const [showQuiz, setShowQuiz] = useState(false);
   const [cellSize, setCellSize] = useState(60);
@@ -131,8 +151,8 @@ export default function EndlessPage() {
       if (!container || !canvas) return;
 
       const rect = container.getBoundingClientRect();
-      const cols = 12;
-      const rows = 8;
+      const cols = 16;
+      const rows = 10;
 
       // Calculate cell size to fit the grid in available space
       const cs = Math.floor(Math.min(rect.width / cols, rect.height / rows));
@@ -254,8 +274,19 @@ export default function EndlessPage() {
   }, [speed, setSpeed]);
 
   const handleTowerSelect = useCallback((type: TowerType) => {
+    setIsRandomTower(false);
     setSelectedTower((prev) => (prev === type ? null : type));
   }, []);
+
+  const handleRandomTowerSelect = useCallback(() => {
+    if (isRandomTower) {
+      setIsRandomTower(false);
+      setSelectedTower(null);
+    } else {
+      setIsRandomTower(true);
+      setSelectedTower(TowerType.ARCHER); // placeholder
+    }
+  }, [isRandomTower]);
 
   const handleCanvasTap = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
@@ -291,7 +322,7 @@ export default function EndlessPage() {
       if (row < 0 || row >= mapData.grid.length || col < 0 || col >= mapData.grid[0].length) return;
 
       // If we have a selected tower, try to place it
-      if (selectedTower) {
+      if (selectedTower || isRandomTower) {
         const gridValue = mapData.grid[row][col];
         if (gridValue !== 2) return; // Only tower slots
 
@@ -301,12 +332,45 @@ export default function EndlessPage() {
         );
         if (existingTower) return;
 
-        const def = TOWER_DEFINITIONS[selectedTower];
+        if (isRandomTower) {
+          // Random tower placement
+          if (gold < RANDOM_TOWER_COST) return;
+
+          const rolledType = rollRandomTower();
+          const rolledDef = TOWER_DEFINITIONS[rolledType];
+
+          const newTower: Tower = {
+            id: `tower-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+            type: rolledType,
+            grade: 1,
+            position: { row, col },
+            stats: { ...rolledDef.baseStats },
+            level: 1,
+            mergeCount: 0,
+            targetingMode: 'first',
+          };
+
+          addTower(newTower);
+          useGameStore.getState().addGold(-RANDOM_TOWER_COST);
+          setSelectedTower(null);
+          setIsRandomTower(false);
+
+          // Show notification
+          setRandomTowerNotif({
+            name: rolledDef.nameKr,
+            icon: rolledDef.icon,
+            isLegendary: LEGENDARY_TYPES.has(rolledType),
+          });
+          setTimeout(() => setRandomTowerNotif(null), 2500);
+          return;
+        }
+
+        const def = TOWER_DEFINITIONS[selectedTower!];
         if (gold < def.cost) return;
 
         const newTower: Tower = {
           id: `tower-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-          type: selectedTower,
+          type: selectedTower!,
           grade: 1,
           position: { row, col },
           stats: { ...def.baseStats },
@@ -331,7 +395,7 @@ export default function EndlessPage() {
         gameLoop.selectedTowerId.current = null;
       }
     },
-    [selectedTower, gold, towers, addTower, gameLoop]
+    [selectedTower, isRandomTower, gold, towers, addTower, gameLoop]
   );
 
   const handleStartWave = useCallback(() => {
@@ -359,8 +423,8 @@ export default function EndlessPage() {
       if (!container || !canvas) return;
 
       const rect = container.getBoundingClientRect();
-      const cols = 12;
-      const rows = 8;
+      const cols = 16;
+      const rows = 10;
       const cs = Math.floor(Math.min(rect.width / cols, rect.height / rows));
       setCellSize(cs);
       canvas.width = cols * cs;
@@ -486,8 +550,40 @@ export default function EndlessPage() {
         {/* Tower Selection Bar */}
         <div className="overflow-x-auto scrollbar-hide">
           <div className="flex gap-2 px-3 py-2 min-w-max">
+            {/* Random Tower Button */}
+            <motion.button
+              whileTap={{ scale: 0.95 }}
+              onClick={handleRandomTowerSelect}
+              className={`
+                flex flex-col items-center gap-0.5 p-2 rounded-xl min-w-[60px]
+                transition-all select-none relative
+                ${
+                  isRandomTower
+                    ? 'bg-gradient-to-b from-purple-600/40 to-amber-600/40 border-2 border-amber-400 shadow-lg shadow-amber-500/20'
+                    : gold >= RANDOM_TOWER_COST
+                      ? 'bg-gradient-to-b from-purple-900/60 to-amber-900/60 border-2 border-purple-500/50 hover:border-amber-400 active:bg-slate-700'
+                      : 'bg-slate-800/40 border-2 border-transparent opacity-40'
+                }
+              `}
+            >
+              <span className="text-xl leading-none">?</span>
+              <span className="text-[10px] text-amber-300 font-bold truncate w-full text-center">
+                Random
+              </span>
+              <span
+                className={`text-[10px] font-bold tabular-nums ${
+                  gold >= RANDOM_TOWER_COST ? 'text-amber-400' : 'text-slate-600'
+                }`}
+              >
+                {RANDOM_TOWER_COST}G
+              </span>
+            </motion.button>
+
+            {/* Separator */}
+            <div className="w-px bg-slate-700/50 self-stretch my-1" />
+
             {towerList.map((tower) => {
-              const isSelected = selectedTower === tower.type;
+              const isSelected = selectedTower === tower.type && !isRandomTower;
               const canAfford = gold >= tower.cost;
 
               return (
@@ -524,6 +620,36 @@ export default function EndlessPage() {
           </div>
         </div>
       </div>
+
+      {/* Random Tower Notification */}
+      <AnimatePresence>
+        {randomTowerNotif && (
+          <motion.div
+            initial={{ y: 60, opacity: 0, scale: 0.8 }}
+            animate={{ y: 0, opacity: 1, scale: 1 }}
+            exit={{ y: -30, opacity: 0, scale: 0.9 }}
+            className="absolute bottom-40 left-1/2 -translate-x-1/2 z-40 pointer-events-none"
+          >
+            <div className={`
+              flex items-center gap-2 px-5 py-3 rounded-2xl shadow-xl
+              ${randomTowerNotif.isLegendary
+                ? 'bg-gradient-to-r from-amber-600 to-yellow-500 border border-yellow-300/50'
+                : 'bg-gradient-to-r from-slate-700 to-slate-600 border border-slate-500/50'
+              }
+            `}>
+              <span className="text-2xl">{randomTowerNotif.icon}</span>
+              <div className="text-center">
+                <p className={`text-xs font-bold ${randomTowerNotif.isLegendary ? 'text-yellow-100' : 'text-slate-300'}`}>
+                  {randomTowerNotif.isLegendary ? 'LEGENDARY!' : 'Got Tower!'}
+                </p>
+                <p className="text-sm font-black text-white">
+                  {randomTowerNotif.name}
+                </p>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Word Quiz Modal */}
       <WordQuizModal

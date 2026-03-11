@@ -1,5 +1,5 @@
-const CACHE_NAME = 'wordguard-v1';
-const urlsToCache = [
+const CACHE_NAME = 'wordguard-v2';
+const STATIC_ASSETS = [
   '/',
   '/adventure/',
   '/play/',
@@ -11,9 +11,6 @@ const urlsToCache = [
 ];
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(urlsToCache))
-  );
   self.skipWaiting();
 });
 
@@ -29,22 +26,53 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  // Only handle GET requests - HEAD and other methods are unsupported for caching
   if (event.request.method !== 'GET') return;
 
-  event.respondWith(
-    caches.match(event.request).then((response) => {
-      if (response) return response;
-      return fetch(event.request).then((fetchResponse) => {
-        if (!fetchResponse || fetchResponse.status !== 200) {
-          return fetchResponse;
-        }
-        const responseToCache = fetchResponse.clone();
-        caches.open(CACHE_NAME).then((cache) => {
-          cache.put(event.request, responseToCache);
+  const url = new URL(event.request.url);
+
+  // HTML pages: network-first (always get latest)
+  if (event.request.mode === 'navigate' || event.request.headers.get('accept')?.includes('text/html')) {
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          if (response.ok) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+          }
+          return response;
+        })
+        .catch(() => caches.match(event.request))
+    );
+    return;
+  }
+
+  // _next/static assets: cache-first (hashed filenames = immutable)
+  if (url.pathname.startsWith('/_next/static/')) {
+    event.respondWith(
+      caches.match(event.request).then((cached) => {
+        if (cached) return cached;
+        return fetch(event.request).then((response) => {
+          if (response.ok) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+          }
+          return response;
         });
-        return fetchResponse;
-      }).catch(() => response);
-    })
+      })
+    );
+    return;
+  }
+
+  // Everything else: network-first
+  event.respondWith(
+    fetch(event.request)
+      .then((response) => {
+        if (response.ok) {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+        }
+        return response;
+      })
+      .catch(() => caches.match(event.request))
   );
 });

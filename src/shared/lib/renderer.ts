@@ -629,31 +629,17 @@ export function drawMap(
           ctx.fill();
         }
       } else if (terrain === 2) {
-        // Buildable tile: highlight + grid + corner dots
-        ctx.fillStyle = 'rgba(120,200,255,0.08)';
+        // Buildable tile: subtle highlight only (no distracting borders)
+        ctx.fillStyle = 'rgba(100,200,100,0.06)';
         ctx.fillRect(x, y, cellSize, cellSize);
-        ctx.strokeStyle = 'rgba(100,180,255,0.15)';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(x + 2, y + 2, cellSize - 4, cellSize - 4);
-        ctx.strokeStyle = 'rgba(100,180,255,0.07)';
-        ctx.lineWidth = 0.5;
+        // Tiny corner dots
+        ctx.fillStyle = 'rgba(150,220,150,0.15)';
         ctx.beginPath();
-        ctx.moveTo(x + cellSize * 0.5, y + 2);
-        ctx.lineTo(x + cellSize * 0.5, y + cellSize - 2);
-        ctx.moveTo(x + 2, y + cellSize * 0.5);
-        ctx.lineTo(x + cellSize - 2, y + cellSize * 0.5);
-        ctx.stroke();
-        ctx.fillStyle = 'rgba(100,180,255,0.12)';
-        const cOff = 4;
-        ctx.beginPath();
-        ctx.arc(x + cOff, y + cOff, 1, 0, Math.PI * 2);
-        ctx.arc(x + cellSize - cOff, y + cOff, 1, 0, Math.PI * 2);
-        ctx.arc(x + cOff, y + cellSize - cOff, 1, 0, Math.PI * 2);
-        ctx.arc(x + cellSize - cOff, y + cellSize - cOff, 1, 0, Math.PI * 2);
+        ctx.arc(x + 3, y + 3, 1, 0, Math.PI * 2);
+        ctx.arc(x + cellSize - 3, y + 3, 1, 0, Math.PI * 2);
+        ctx.arc(x + 3, y + cellSize - 3, 1, 0, Math.PI * 2);
+        ctx.arc(x + cellSize - 3, y + cellSize - 3, 1, 0, Math.PI * 2);
         ctx.fill();
-        const shimmer = Math.sin(t * 2 + col * 0.5 + row * 0.3) * 0.15 + 0.1;
-        ctx.fillStyle = `rgba(150,220,255,${shimmer * 0.3})`;
-        ctx.fillRect(x, y, cellSize, cellSize);
       } else if (terrain === 9) {
         // Lava glow + cracks
         const glow = Math.sin(t * 3 + col + row) * 0.2 + 0.3;
@@ -815,10 +801,10 @@ export function drawPath(
   ctx.lineDashOffset = 0;
   ctx.lineCap = 'round';
 
-  // Direction arrows along the path (animated flow)
-  const arrowSpacing = cellSize * 2.5;
-  const arrowOffset = (t * 30) % arrowSpacing;
-  ctx.fillStyle = 'rgba(255,255,200,0.15)';
+  // Direction arrows along the path (subtle animated flow)
+  const arrowSpacing = cellSize * 3;
+  const arrowOffset = (t * 20) % arrowSpacing;
+  ctx.fillStyle = 'rgba(255,255,200,0.08)';
   for (let i = 0; i < path.length - 1; i++) {
     const p0 = getCellCenter(path[i][0], path[i][1], cellSize);
     const p1 = getCellCenter(path[i + 1][0], path[i + 1][1], cellSize);
@@ -883,10 +869,10 @@ export function drawPath(
   ctx.textBaseline = 'middle';
   ctx.fillText('\u25B6', start.x + 1, start.y);
 
-  // "START" label
-  ctx.fillStyle = 'rgba(68,255,68,0.7)';
-  ctx.font = `bold ${Math.round(sr * 0.4)}px sans-serif`;
-  ctx.fillText('START', start.x, start.y + sr + 8);
+  // "START" label (subtle)
+  ctx.fillStyle = 'rgba(68,255,68,0.4)';
+  ctx.font = `bold ${Math.round(sr * 0.35)}px sans-serif`;
+  ctx.fillText('START', start.x, start.y + sr + 6);
 
   // End portal (red X marker)
   const end = getCellCenter(path[path.length - 1][0], path[path.length - 1][1], cellSize);
@@ -956,7 +942,7 @@ export function drawTower(
   const recoilScale = 1 + recoil * 0.08; // slight scale-up on fire
   const center = { x: rawCenter.x, y: rawCenter.y - recoilOffset };
   const pal = TOWER_PALETTE[tower.type] ?? TOWER_PALETTE.ARCHER;
-  const size = cellSize * 0.35 * recoilScale;
+  const size = cellSize * 0.42 * recoilScale;
 
   ctx.save();
 
@@ -1588,8 +1574,8 @@ export function drawEnemy(
 ): void {
   const { x: rawX, y: rawY } = enemy.position;
   const isBoss = BOSS_TYPES.has(enemy.type);
-  const baseSize = cellSize * 0.25;
-  const size = isBoss ? baseSize * 2 : baseSize;
+  const baseSize = cellSize * 0.3;
+  const size = isBoss ? baseSize * 1.8 : baseSize;
   let pal = ENEMY_PALETTE[enemy.type] ?? { body: '#cc4444', light: '#ee6666', dark: '#aa2222', eye: '#ffffff' };
   const t = getTime();
 

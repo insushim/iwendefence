@@ -1057,36 +1057,61 @@ export function drawTower(
 type Pal = { base: string; body: string; top: string; glow: string; accent: string };
 
 function drawTowerBase(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, color: string): void {
-  // 3D platform
-  const d = r * 0.2;
-  // Side
-  ctx.fillStyle = color;
+  // Ground shadow (ambient occlusion)
+  const shadowGrad = ctx.createRadialGradient(x, y + r * 0.3, r * 0.3, x, y + r * 0.3, r * 1.3);
+  shadowGrad.addColorStop(0, 'rgba(0,0,0,0.25)');
+  shadowGrad.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = shadowGrad;
+  ctx.beginPath();
+  ctx.ellipse(x, y + r * 0.3, r * 1.2, r * 0.45, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 3D platform depth (side face)
+  const d = r * 0.25;
+  const sideGrad = ctx.createLinearGradient(x - r, y, x + r, y + d);
+  sideGrad.addColorStop(0, 'rgba(0,0,0,0.25)');
+  sideGrad.addColorStop(0.5, color);
+  sideGrad.addColorStop(1, 'rgba(0,0,0,0.35)');
+  ctx.fillStyle = sideGrad;
   ctx.beginPath();
   ctx.ellipse(x, y + d, r, r * 0.35, 0, 0, Math.PI);
   ctx.fill();
-  // Top ellipse
-  const grad = ctx.createRadialGradient(x - r * 0.2, y - r * 0.1, 0, x, y, r);
-  grad.addColorStop(0, 'rgba(255,255,255,0.15)');
-  grad.addColorStop(1, 'rgba(0,0,0,0.1)');
+
+  // Top ellipse - stone/metal platform
   ctx.fillStyle = color;
   ctx.beginPath();
   ctx.ellipse(x, y, r, r * 0.35, 0, 0, Math.PI * 2);
   ctx.fill();
-  ctx.fillStyle = grad;
+
+  // Top highlight (specular)
+  const topGrad = ctx.createRadialGradient(x - r * 0.25, y - r * 0.08, 0, x, y, r);
+  topGrad.addColorStop(0, 'rgba(255,255,255,0.25)');
+  topGrad.addColorStop(0.4, 'rgba(255,255,255,0.08)');
+  topGrad.addColorStop(1, 'rgba(0,0,0,0.15)');
+  ctx.fillStyle = topGrad;
   ctx.beginPath();
   ctx.ellipse(x, y, r, r * 0.35, 0, 0, Math.PI * 2);
   ctx.fill();
+
+  // Rim highlight
+  ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.ellipse(x, y, r * 0.98, r * 0.34, 0, Math.PI * 1.1, Math.PI * 1.9);
+  ctx.stroke();
 }
 
 function drawArcherTower(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, p: Pal): void {
   drawTowerBase(ctx, x, y + s * 0.4, s * 0.9, p.base);
 
-  // Tower body (trapezoid)
-  const grad = ctx.createLinearGradient(x - s * 0.5, y, x + s * 0.5, y);
-  grad.addColorStop(0, p.top);
-  grad.addColorStop(0.5, p.body);
-  grad.addColorStop(1, p.accent);
-  ctx.fillStyle = grad;
+  // Stone tower body (trapezoid with brick texture feel)
+  const bodyGrad = ctx.createLinearGradient(x - s * 0.5, y, x + s * 0.5, y);
+  bodyGrad.addColorStop(0, p.accent);
+  bodyGrad.addColorStop(0.3, p.body);
+  bodyGrad.addColorStop(0.5, p.top);
+  bodyGrad.addColorStop(0.7, p.body);
+  bodyGrad.addColorStop(1, p.accent);
+  ctx.fillStyle = bodyGrad;
   ctx.beginPath();
   ctx.moveTo(x - s * 0.45, y + s * 0.3);
   ctx.lineTo(x - s * 0.3, y - s * 0.6);
@@ -1095,83 +1120,207 @@ function drawArcherTower(ctx: CanvasRenderingContext2D, x: number, y: number, s:
   ctx.closePath();
   ctx.fill();
 
-  // Roof (pointed)
-  const roofGrad = ctx.createLinearGradient(x, y - s * 1.2, x, y - s * 0.5);
-  roofGrad.addColorStop(0, '#8b4513');
-  roofGrad.addColorStop(1, '#5a2a0a');
-  ctx.fillStyle = roofGrad;
+  // Stone mortar lines (subtle horizontal)
+  ctx.strokeStyle = 'rgba(0,0,0,0.1)';
+  ctx.lineWidth = 0.5;
+  for (let i = 0; i < 4; i++) {
+    const ly = y + s * 0.2 - i * s * 0.2;
+    const lw = s * (0.4 - i * 0.03);
+    ctx.beginPath();
+    ctx.moveTo(x - lw, ly);
+    ctx.lineTo(x + lw, ly);
+    ctx.stroke();
+  }
+
+  // Light side highlight
+  ctx.fillStyle = 'rgba(255,255,255,0.08)';
   ctx.beginPath();
-  ctx.moveTo(x, y - s * 1.2);
-  ctx.lineTo(x - s * 0.45, y - s * 0.55);
-  ctx.lineTo(x + s * 0.45, y - s * 0.55);
+  ctx.moveTo(x - s * 0.45, y + s * 0.3);
+  ctx.lineTo(x - s * 0.3, y - s * 0.6);
+  ctx.lineTo(x - s * 0.05, y - s * 0.6);
+  ctx.lineTo(x - s * 0.15, y + s * 0.3);
   ctx.closePath();
   ctx.fill();
 
-  // Highlight on roof
-  ctx.fillStyle = 'rgba(255,255,255,0.15)';
+  // Battlements at top
+  const bw = s * 0.12;
+  const bh = s * 0.1;
+  for (let i = -1; i <= 1; i += 2) {
+    ctx.fillStyle = p.body;
+    ctx.fillRect(x + i * s * 0.22 - bw / 2, y - s * 0.7, bw, bh);
+    ctx.fillStyle = 'rgba(0,0,0,0.1)';
+    ctx.fillRect(x + i * s * 0.22 - bw / 2, y - s * 0.7 + bh * 0.7, bw, bh * 0.3);
+  }
+
+  // Roof (pointed, with wood texture gradient)
+  const roofGrad = ctx.createLinearGradient(x - s * 0.2, y - s * 1.2, x + s * 0.2, y - s * 0.5);
+  roofGrad.addColorStop(0, '#a05a20');
+  roofGrad.addColorStop(0.3, '#8b4513');
+  roofGrad.addColorStop(0.5, '#7a3a10');
+  roofGrad.addColorStop(1, '#5a2a0a');
+  ctx.fillStyle = roofGrad;
   ctx.beginPath();
-  ctx.moveTo(x - s * 0.05, y - s * 1.15);
-  ctx.lineTo(x - s * 0.4, y - s * 0.55);
+  ctx.moveTo(x, y - s * 1.25);
+  ctx.lineTo(x - s * 0.48, y - s * 0.55);
+  ctx.lineTo(x + s * 0.48, y - s * 0.55);
+  ctx.closePath();
+  ctx.fill();
+
+  // Left side highlight on roof
+  ctx.fillStyle = 'rgba(255,255,255,0.12)';
+  ctx.beginPath();
+  ctx.moveTo(x - s * 0.03, y - s * 1.2);
+  ctx.lineTo(x - s * 0.42, y - s * 0.55);
   ctx.lineTo(x - s * 0.05, y - s * 0.55);
   ctx.closePath();
   ctx.fill();
 
-  // Window
-  ctx.fillStyle = '#ffeeaa';
-  ctx.fillRect(x - s * 0.1, y - s * 0.3, s * 0.2, s * 0.2);
-  ctx.strokeStyle = p.accent;
+  // Roof edge outline
+  ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+  ctx.lineWidth = 0.8;
+  ctx.beginPath();
+  ctx.moveTo(x, y - s * 1.25);
+  ctx.lineTo(x + s * 0.48, y - s * 0.55);
+  ctx.stroke();
+
+  // Arrow slit (cross-shaped)
+  ctx.fillStyle = '#1a1a10';
+  ctx.fillRect(x - s * 0.02, y - s * 0.35, s * 0.04, s * 0.25);
+  ctx.fillRect(x - s * 0.08, y - s * 0.25, s * 0.16, s * 0.04);
+
+  // Window glow from arrow slit
+  ctx.fillStyle = 'rgba(255,230,170,0.3)';
+  ctx.fillRect(x - s * 0.05, y - s * 0.32, s * 0.1, s * 0.19);
+
+  // Flag on top
+  const t = getTime();
+  const flagWave = Math.sin(t * 3) * s * 0.03;
+  ctx.fillStyle = '#cc2222';
+  ctx.beginPath();
+  ctx.moveTo(x, y - s * 1.25);
+  ctx.lineTo(x + s * 0.2 + flagWave, y - s * 1.35);
+  ctx.lineTo(x + s * 0.18, y - s * 1.25);
+  ctx.closePath();
+  ctx.fill();
+  // Flag pole
+  ctx.strokeStyle = '#8a8a8a';
   ctx.lineWidth = 1;
-  ctx.strokeRect(x - s * 0.1, y - s * 0.3, s * 0.2, s * 0.2);
+  ctx.beginPath();
+  ctx.moveTo(x, y - s * 1.25);
+  ctx.lineTo(x, y - s * 1.4);
+  ctx.stroke();
 }
 
 function drawMagicTower(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, p: Pal): void {
   drawTowerBase(ctx, x, y + s * 0.4, s * 0.8, p.base);
   const t = getTime();
 
-  // Crystal spire body
-  const grad = ctx.createLinearGradient(x - s * 0.3, y + s * 0.3, x + s * 0.3, y - s);
-  grad.addColorStop(0, p.accent);
-  grad.addColorStop(0.4, p.body);
-  grad.addColorStop(0.8, p.top);
-  grad.addColorStop(1, '#ffffff');
-  ctx.fillStyle = grad;
+  // Magical aura glow (ground)
+  const auraGrad = ctx.createRadialGradient(x, y + s * 0.1, 0, x, y + s * 0.1, s * 0.9);
+  const auraPulse = 0.5 + Math.sin(t * 2) * 0.2;
+  auraGrad.addColorStop(0, `rgba(150,80,255,${0.08 * auraPulse})`);
+  auraGrad.addColorStop(1, 'rgba(100,0,200,0)');
+  ctx.fillStyle = auraGrad;
   ctx.beginPath();
-  ctx.moveTo(x, y - s * 1.3);
+  ctx.arc(x, y + s * 0.1, s * 0.9, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Crystal spire body (faceted, multi-face)
+  // Left face (darker)
+  const leftGrad = ctx.createLinearGradient(x - s * 0.35, y, x, y);
+  leftGrad.addColorStop(0, p.accent);
+  leftGrad.addColorStop(1, p.body);
+  ctx.fillStyle = leftGrad;
+  ctx.beginPath();
+  ctx.moveTo(x, y - s * 1.35);
   ctx.lineTo(x - s * 0.35, y + s * 0.3);
-  ctx.lineTo(x + s * 0.35, y + s * 0.3);
+  ctx.lineTo(x, y + s * 0.15);
   ctx.closePath();
   ctx.fill();
-
-  // Inner glow
-  ctx.fillStyle = 'rgba(255,255,255,0.2)';
+  // Right face (lighter)
+  const rightGrad = ctx.createLinearGradient(x, y, x + s * 0.35, y);
+  rightGrad.addColorStop(0, p.body);
+  rightGrad.addColorStop(1, p.top);
+  ctx.fillStyle = rightGrad;
   ctx.beginPath();
-  ctx.moveTo(x - s * 0.05, y - s * 1.2);
-  ctx.lineTo(x - s * 0.25, y + s * 0.2);
-  ctx.lineTo(x + s * 0.05, y + s * 0.2);
+  ctx.moveTo(x, y - s * 1.35);
+  ctx.lineTo(x + s * 0.35, y + s * 0.3);
+  ctx.lineTo(x, y + s * 0.15);
   ctx.closePath();
   ctx.fill();
 
-  // Floating orb
-  const orbY = y - s * 0.5 + Math.sin(t * 3) * s * 0.1;
-  const orbGrad = ctx.createRadialGradient(x, orbY, 0, x, orbY, s * 0.2);
+  // Edge highlight line
+  ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+  ctx.lineWidth = 0.8;
+  ctx.beginPath();
+  ctx.moveTo(x, y - s * 1.35);
+  ctx.lineTo(x, y + s * 0.15);
+  ctx.stroke();
+
+  // Specular facet highlight
+  ctx.fillStyle = 'rgba(255,255,255,0.15)';
+  ctx.beginPath();
+  ctx.moveTo(x - s * 0.03, y - s * 1.2);
+  ctx.lineTo(x - s * 0.2, y + s * 0.1);
+  ctx.lineTo(x + s * 0.05, y + s * 0.05);
+  ctx.closePath();
+  ctx.fill();
+
+  // Rune ring (rotating magical circle at mid-height)
+  const runeY = y - s * 0.15;
+  ctx.strokeStyle = `rgba(180,120,255,${0.4 + Math.sin(t * 2.5) * 0.15})`;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.ellipse(x, runeY, s * 0.35, s * 0.1, t * 0.5, 0, Math.PI * 2);
+  ctx.stroke();
+  // Rune dots on ring
+  for (let i = 0; i < 4; i++) {
+    const ra = t * 0.5 + (Math.PI * 2 * i) / 4;
+    const rx = x + Math.cos(ra) * s * 0.35;
+    const ry = runeY + Math.sin(ra) * s * 0.1;
+    ctx.fillStyle = `rgba(220,180,255,${0.5 + Math.sin(t * 3 + i) * 0.3})`;
+    ctx.beginPath();
+    ctx.arc(rx, ry, 1.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Floating energy orb (bigger, more detail)
+  const orbY = y - s * 0.55 + Math.sin(t * 3) * s * 0.08;
+  const orbR = s * 0.22;
+  // Outer glow
+  const orbGlow = ctx.createRadialGradient(x, orbY, orbR * 0.5, x, orbY, orbR * 2);
+  orbGlow.addColorStop(0, `rgba(180,100,255,${0.2 + Math.sin(t * 4) * 0.1})`);
+  orbGlow.addColorStop(1, 'rgba(120,50,200,0)');
+  ctx.fillStyle = orbGlow;
+  ctx.beginPath();
+  ctx.arc(x, orbY, orbR * 2, 0, Math.PI * 2);
+  ctx.fill();
+  // Orb body
+  const orbGrad = ctx.createRadialGradient(x - orbR * 0.3, orbY - orbR * 0.3, 0, x, orbY, orbR);
   orbGrad.addColorStop(0, '#ffffff');
-  orbGrad.addColorStop(0.5, p.top);
+  orbGrad.addColorStop(0.3, '#ddaaff');
+  orbGrad.addColorStop(0.6, p.top);
   orbGrad.addColorStop(1, p.glow);
   ctx.fillStyle = orbGrad;
   ctx.beginPath();
-  ctx.arc(x, orbY, s * 0.18, 0, Math.PI * 2);
+  ctx.arc(x, orbY, orbR, 0, Math.PI * 2);
+  ctx.fill();
+  // Orb specular
+  ctx.fillStyle = 'rgba(255,255,255,0.45)';
+  ctx.beginPath();
+  ctx.ellipse(x - orbR * 0.25, orbY - orbR * 0.3, orbR * 0.35, orbR * 0.2, -0.4, 0, Math.PI * 2);
   ctx.fill();
 
-  // Sparkle particles
-  for (let i = 0; i < 3; i++) {
-    const angle = t * 2 + i * 2.1;
+  // Orbiting sparkles
+  for (let i = 0; i < 5; i++) {
+    const angle = t * 2 + i * 1.26;
     const dist = s * 0.5 + Math.sin(t * 3 + i) * s * 0.1;
     const px = x + Math.cos(angle) * dist * 0.5;
     const py = y - s * 0.3 + Math.sin(angle) * dist * 0.3;
-    const sparkAlpha = Math.sin(t * 5 + i * 1.5) * 0.3 + 0.3;
-    ctx.fillStyle = `rgba(200,150,255,${sparkAlpha})`;
+    const sparkAlpha = Math.sin(t * 5 + i * 1.5) * 0.3 + 0.4;
+    ctx.fillStyle = `rgba(220,170,255,${sparkAlpha})`;
     ctx.beginPath();
-    ctx.arc(px, py, 1.5, 0, Math.PI * 2);
+    ctx.arc(px, py, 1.8, 0, Math.PI * 2);
     ctx.fill();
   }
 }
@@ -1179,46 +1328,84 @@ function drawMagicTower(ctx: CanvasRenderingContext2D, x: number, y: number, s: 
 function drawCannonTower(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, p: Pal): void {
   drawTowerBase(ctx, x, y + s * 0.4, s * 1, p.base);
 
-  // Turret body
-  const bGrad = ctx.createLinearGradient(x - s * 0.5, y, x + s * 0.5, y);
-  bGrad.addColorStop(0, p.top);
-  bGrad.addColorStop(0.5, p.body);
+  // Heavy turret body (metallic sphere)
+  const bGrad = ctx.createRadialGradient(x - s * 0.15, y - s * 0.2, 0, x, y - s * 0.1, s * 0.55);
+  bGrad.addColorStop(0, '#bbbbbb');
+  bGrad.addColorStop(0.3, p.top);
+  bGrad.addColorStop(0.6, p.body);
   bGrad.addColorStop(1, p.accent);
   ctx.fillStyle = bGrad;
   ctx.beginPath();
   ctx.arc(x, y - s * 0.1, s * 0.5, 0, Math.PI * 2);
   ctx.fill();
 
-  // Metal rim
-  ctx.strokeStyle = p.accent;
-  ctx.lineWidth = 2;
+  // Metal rim with highlight
+  ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.arc(x, y - s * 0.1, s * 0.5, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.arc(x, y - s * 0.1, s * 0.48, Math.PI * 1.1, Math.PI * 1.8);
   ctx.stroke();
 
-  // Barrel
-  const barGrad = ctx.createLinearGradient(x - s * 0.12, y, x + s * 0.12, y);
-  barGrad.addColorStop(0, p.top);
-  barGrad.addColorStop(0.5, p.body);
-  barGrad.addColorStop(1, p.accent);
-  ctx.fillStyle = barGrad;
-  ctx.fillRect(x - s * 0.12, y - s * 1.0, s * 0.24, s * 0.7);
-  ctx.strokeStyle = p.accent;
-  ctx.lineWidth = 1;
-  ctx.strokeRect(x - s * 0.12, y - s * 1.0, s * 0.24, s * 0.7);
-
-  // Barrel mouth
-  ctx.fillStyle = '#222222';
+  // Specular on turret
+  ctx.fillStyle = 'rgba(255,255,255,0.12)';
   ctx.beginPath();
-  ctx.arc(x, y - s * 1.0, s * 0.1, 0, Math.PI * 2);
+  ctx.ellipse(x - s * 0.12, y - s * 0.25, s * 0.18, s * 0.1, -0.4, 0, Math.PI * 2);
   ctx.fill();
 
-  // Rivet details
-  ctx.fillStyle = '#aaaaaa';
-  for (let i = 0; i < 4; i++) {
-    const angle = (Math.PI * 2 * i) / 4 + 0.4;
-    const rx = x + Math.cos(angle) * s * 0.35;
-    const ry = y - s * 0.1 + Math.sin(angle) * s * 0.35;
+  // Barrel (thicker, 3D cylinder feel)
+  const barGrad = ctx.createLinearGradient(x - s * 0.14, y, x + s * 0.14, y);
+  barGrad.addColorStop(0, '#555555');
+  barGrad.addColorStop(0.2, '#888888');
+  barGrad.addColorStop(0.5, '#aaaaaa');
+  barGrad.addColorStop(0.8, '#777777');
+  barGrad.addColorStop(1, '#444444');
+  ctx.fillStyle = barGrad;
+  ctx.fillRect(x - s * 0.14, y - s * 1.05, s * 0.28, s * 0.75);
+
+  // Barrel bands (metal rings)
+  ctx.strokeStyle = '#666666';
+  ctx.lineWidth = 2;
+  for (let i = 0; i < 3; i++) {
+    const by = y - s * 0.4 - i * s * 0.25;
     ctx.beginPath();
-    ctx.arc(rx, ry, 1.5, 0, Math.PI * 2);
+    ctx.moveTo(x - s * 0.15, by);
+    ctx.lineTo(x + s * 0.15, by);
+    ctx.stroke();
+  }
+
+  // Barrel mouth (dark bore with orange glow hint)
+  ctx.fillStyle = '#111111';
+  ctx.beginPath();
+  ctx.arc(x, y - s * 1.05, s * 0.12, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = 'rgba(255,100,30,0.15)';
+  ctx.beginPath();
+  ctx.arc(x, y - s * 1.05, s * 0.09, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Muzzle rim
+  ctx.strokeStyle = '#777777';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.arc(x, y - s * 1.05, s * 0.13, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // Rivet details (bigger, 3D)
+  for (let i = 0; i < 6; i++) {
+    const angle = (Math.PI * 2 * i) / 6 + 0.3;
+    const rx = x + Math.cos(angle) * s * 0.38;
+    const ry = y - s * 0.1 + Math.sin(angle) * s * 0.38;
+    const rGrad = ctx.createRadialGradient(rx - 0.5, ry - 0.5, 0, rx, ry, 2);
+    rGrad.addColorStop(0, '#cccccc');
+    rGrad.addColorStop(1, '#666666');
+    ctx.fillStyle = rGrad;
+    ctx.beginPath();
+    ctx.arc(rx, ry, 2, 0, Math.PI * 2);
     ctx.fill();
   }
 }
@@ -3094,116 +3281,221 @@ export function drawProjectile(ctx: CanvasRenderingContext2D, proj: Projectile):
   const pt = getTime();
   switch (proj.towerType) {
     case 'ARCHER': {
-      // Elongated arrow with trail
-      const trailLen = 14;
-      // Trail (fading line)
-      const trailGrad = ctx.createLinearGradient(x - trailLen, y, x, y);
-      trailGrad.addColorStop(0, 'rgba(139,105,20,0)');
-      trailGrad.addColorStop(1, 'rgba(200,160,80,0.4)');
+      // Speed lines (motion blur)
+      for (let i = 1; i <= 3; i++) {
+        ctx.strokeStyle = `rgba(200,170,100,${0.08 / i})`;
+        ctx.lineWidth = 0.5;
+        ctx.beginPath();
+        ctx.moveTo(x - 25 - i * 4, y + (i - 2) * 1.5);
+        ctx.lineTo(x - 8, y);
+        ctx.stroke();
+      }
+      // Golden energy trail
+      const trailGrad = ctx.createLinearGradient(x - 22, y, x, y);
+      trailGrad.addColorStop(0, 'rgba(255,215,0,0)');
+      trailGrad.addColorStop(0.3, 'rgba(255,200,80,0.15)');
+      trailGrad.addColorStop(0.7, 'rgba(255,180,60,0.3)');
+      trailGrad.addColorStop(1, 'rgba(255,160,40,0.5)');
       ctx.strokeStyle = trailGrad;
-      ctx.lineWidth = 1.5;
+      ctx.lineWidth = 2.5;
       ctx.beginPath();
-      ctx.moveTo(x - trailLen, y);
-      ctx.lineTo(x, y);
+      ctx.moveTo(x - 22, y);
+      ctx.lineTo(x - 2, y);
       ctx.stroke();
-      // Arrowhead (elongated triangle)
-      ctx.fillStyle = '#8b6914';
+      // Inner bright trail
+      ctx.strokeStyle = 'rgba(255,240,200,0.25)';
+      ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.moveTo(x + 6, y);
-      ctx.lineTo(x - 2, y - 2.5);
-      ctx.lineTo(x - 1, y);
-      ctx.lineTo(x - 2, y + 2.5);
+      ctx.moveTo(x - 18, y);
+      ctx.lineTo(x - 2, y);
+      ctx.stroke();
+      // Arrow shaft (wooden, 3D)
+      const shaftGrad = ctx.createLinearGradient(x - 8, y - 1.2, x - 8, y + 1.2);
+      shaftGrad.addColorStop(0, '#e0b860');
+      shaftGrad.addColorStop(0.3, '#c8a050');
+      shaftGrad.addColorStop(1, '#9a7030');
+      ctx.fillStyle = shaftGrad;
+      ctx.fillRect(x - 8, y - 1.2, 10, 2.4);
+      // Fletching (feathers at back)
+      ctx.fillStyle = 'rgba(180,60,60,0.7)';
+      ctx.beginPath();
+      ctx.moveTo(x - 8, y);
+      ctx.lineTo(x - 12, y - 3.5);
+      ctx.lineTo(x - 6, y);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(x - 8, y);
+      ctx.lineTo(x - 12, y + 3.5);
+      ctx.lineTo(x - 6, y);
+      ctx.fill();
+      // Arrowhead (metallic, larger)
+      const headGrad = ctx.createLinearGradient(x + 2, y - 4, x + 2, y + 4);
+      headGrad.addColorStop(0, '#d0d0d0');
+      headGrad.addColorStop(0.3, '#f0f0f0');
+      headGrad.addColorStop(0.5, '#ffffff');
+      headGrad.addColorStop(0.7, '#c0c0c0');
+      headGrad.addColorStop(1, '#808080');
+      ctx.fillStyle = headGrad;
+      ctx.beginPath();
+      ctx.moveTo(x + 9, y);
+      ctx.lineTo(x + 1, y - 3.5);
+      ctx.lineTo(x + 2, y);
+      ctx.lineTo(x + 1, y + 3.5);
       ctx.closePath();
       ctx.fill();
-      // Shaft
-      ctx.fillStyle = '#c8a050';
-      ctx.fillRect(x - 6, y - 0.8, 7, 1.6);
-      // Specular on arrowhead
-      ctx.fillStyle = 'rgba(255,255,200,0.3)';
+      // Edge highlight on arrowhead
+      ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+      ctx.lineWidth = 0.5;
       ctx.beginPath();
-      ctx.moveTo(x + 5, y - 0.5);
-      ctx.lineTo(x + 1, y - 1.5);
-      ctx.lineTo(x + 1, y);
-      ctx.closePath();
-      ctx.fill();
+      ctx.moveTo(x + 8.5, y - 0.5);
+      ctx.lineTo(x + 1.5, y - 3);
+      ctx.stroke();
       break;
     }
     case 'MAGIC': {
+      // Outer energy field
       ctx.shadowColor = '#cc66ff';
-      ctx.shadowBlur = 12;
-      // Core orb
-      const grad = ctx.createRadialGradient(x, y, 0, x, y, 6);
+      ctx.shadowBlur = 18;
+      const outerGrad = ctx.createRadialGradient(x, y, 4, x, y, 14);
+      outerGrad.addColorStop(0, 'rgba(200,100,255,0.3)');
+      outerGrad.addColorStop(0.5, 'rgba(153,68,221,0.12)');
+      outerGrad.addColorStop(1, 'rgba(100,0,200,0)');
+      ctx.fillStyle = outerGrad;
+      ctx.beginPath();
+      ctx.arc(x, y, 14, 0, Math.PI * 2);
+      ctx.fill();
+      // Swirling energy ring
+      ctx.strokeStyle = 'rgba(200,150,255,0.4)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.ellipse(x, y, 9, 5, pt * 3, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,200,255,0.25)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.ellipse(x, y, 7, 4, -pt * 2, 0, Math.PI * 2);
+      ctx.stroke();
+      // Core orb (bigger, more layers)
+      const grad = ctx.createRadialGradient(x - 1, y - 1, 0, x, y, 8);
       grad.addColorStop(0, '#ffffff');
-      grad.addColorStop(0.3, '#dd88ff');
+      grad.addColorStop(0.2, '#eeccff');
+      grad.addColorStop(0.4, '#dd88ff');
       grad.addColorStop(0.7, '#cc66ff');
       grad.addColorStop(1, 'rgba(153,68,221,0)');
       ctx.fillStyle = grad;
       ctx.beginPath();
-      ctx.arc(x, y, 6, 0, Math.PI * 2);
+      ctx.arc(x, y, 8, 0, Math.PI * 2);
       ctx.fill();
-      // Particle trail (deterministic with time)
-      for (let i = 1; i <= 4; i++) {
-        const trailX = x - i * 5;
-        const trailY = y + Math.sin(pt * 8 + i * 2) * 2.5;
-        const alpha = 0.4 / i;
-        const r = 2.5 / i;
-        ctx.fillStyle = `rgba(200,100,255,${alpha})`;
+      // Specular highlight on orb
+      ctx.fillStyle = 'rgba(255,255,255,0.5)';
+      ctx.beginPath();
+      ctx.ellipse(x - 2, y - 2.5, 2.5, 1.5, -0.4, 0, Math.PI * 2);
+      ctx.fill();
+      // Energy particle trail (more particles, helical)
+      for (let i = 1; i <= 6; i++) {
+        const trailX = x - i * 4.5;
+        const trailY = y + Math.sin(pt * 8 + i * 1.5) * 3.5;
+        const alpha = 0.5 / i;
+        const r = 3 / i;
+        const hue = 270 + Math.sin(pt * 5 + i) * 30;
+        ctx.fillStyle = `hsla(${hue}, 80%, 70%, ${alpha})`;
         ctx.beginPath();
         ctx.arc(trailX, trailY, r, 0, Math.PI * 2);
         ctx.fill();
       }
-      // Sparkle ring
-      for (let i = 0; i < 3; i++) {
-        const angle = pt * 6 + i * 2.1;
-        const dist = 4;
-        ctx.fillStyle = `rgba(255,200,255,${0.3 + Math.sin(pt * 10 + i) * 0.2})`;
+      // Orbiting sparkles (more, larger)
+      for (let i = 0; i < 5; i++) {
+        const angle = pt * 6 + i * 1.26;
+        const dist = 6 + Math.sin(pt * 3 + i) * 2;
+        const sparkAlpha = 0.4 + Math.sin(pt * 10 + i) * 0.3;
+        ctx.fillStyle = `rgba(255,220,255,${sparkAlpha})`;
         ctx.beginPath();
-        ctx.arc(x + Math.cos(angle) * dist, y + Math.sin(angle) * dist, 1, 0, Math.PI * 2);
+        ctx.arc(x + Math.cos(angle) * dist, y + Math.sin(angle) * dist, 1.5, 0, Math.PI * 2);
         ctx.fill();
       }
+      ctx.shadowBlur = 0;
       break;
     }
     case 'CANNON': {
-      // Metal cannonball with specular + smoke trail
-      const grad = ctx.createRadialGradient(x - 2, y - 2, 0, x, y, 5);
-      grad.addColorStop(0, '#999999');
-      grad.addColorStop(0.5, '#555555');
-      grad.addColorStop(1, '#222222');
-      ctx.fillStyle = grad;
+      // Fire trail behind cannonball
+      const fireTrailGrad = ctx.createRadialGradient(x - 6, y, 0, x - 6, y, 10);
+      fireTrailGrad.addColorStop(0, 'rgba(255,200,50,0.4)');
+      fireTrailGrad.addColorStop(0.5, 'rgba(255,100,20,0.15)');
+      fireTrailGrad.addColorStop(1, 'rgba(200,50,0,0)');
+      ctx.fillStyle = fireTrailGrad;
       ctx.beginPath();
-      ctx.arc(x, y, 5, 0, Math.PI * 2);
+      ctx.arc(x - 6, y, 10, 0, Math.PI * 2);
       ctx.fill();
-      // Specular highlight
-      ctx.fillStyle = 'rgba(255,255,255,0.35)';
-      ctx.beginPath();
-      ctx.ellipse(x - 1.5, y - 2, 2, 1.2, -0.3, 0, Math.PI * 2);
-      ctx.fill();
-      // Smoke trail puffs
-      for (let i = 1; i <= 3; i++) {
-        const sx = x - i * 6;
-        const sy = y - i * 1.5;
-        const sa = 0.15 / i;
-        const sr = 3 + i * 1.5;
-        ctx.fillStyle = `rgba(150,150,150,${sa})`;
+      // Smoke trail puffs (volumetric)
+      for (let i = 1; i <= 5; i++) {
+        const sx = x - i * 5.5;
+        const sy = y - i * 2 + Math.sin(pt * 4 + i * 2) * 1.5;
+        const sa = 0.2 / i;
+        const sr = 3 + i * 2;
+        const smokeGrad = ctx.createRadialGradient(sx, sy, 0, sx, sy, sr);
+        smokeGrad.addColorStop(0, `rgba(180,170,160,${sa})`);
+        smokeGrad.addColorStop(1, `rgba(120,115,110,0)`);
+        ctx.fillStyle = smokeGrad;
         ctx.beginPath();
         ctx.arc(sx, sy, sr, 0, Math.PI * 2);
         ctx.fill();
       }
+      // Metal cannonball (bigger, more metallic)
+      ctx.shadowColor = 'rgba(0,0,0,0.5)';
+      ctx.shadowBlur = 4;
+      ctx.shadowOffsetY = 2;
+      const grad = ctx.createRadialGradient(x - 2.5, y - 2.5, 0, x, y, 7);
+      grad.addColorStop(0, '#cccccc');
+      grad.addColorStop(0.3, '#999999');
+      grad.addColorStop(0.6, '#666666');
+      grad.addColorStop(1, '#222222');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(x, y, 7, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.shadowOffsetY = 0;
+      // Metal rim reflection
+      ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+      ctx.lineWidth = 0.8;
+      ctx.beginPath();
+      ctx.arc(x, y, 6.5, Math.PI * 1.1, Math.PI * 1.7);
+      ctx.stroke();
+      // Specular highlight (bright, sharp)
+      ctx.fillStyle = 'rgba(255,255,255,0.55)';
+      ctx.beginPath();
+      ctx.ellipse(x - 2, y - 2.5, 2.5, 1.5, -0.3, 0, Math.PI * 2);
+      ctx.fill();
+      // Secondary specular
+      ctx.fillStyle = 'rgba(255,255,255,0.2)';
+      ctx.beginPath();
+      ctx.ellipse(x + 1.5, y + 2, 1.2, 0.8, 0.5, 0, Math.PI * 2);
+      ctx.fill();
       break;
     }
     case 'ICE': {
+      // Frost aura field
       ctx.shadowColor = '#44ddee';
-      ctx.shadowBlur = 10;
-      // Ice crystal (8-pointed star)
-      const grad = ctx.createRadialGradient(x, y, 0, x, y, 7);
-      grad.addColorStop(0, '#ffffff');
-      grad.addColorStop(0.4, '#bbeeFF');
-      grad.addColorStop(1, 'rgba(68,221,238,0)');
-      ctx.fillStyle = grad;
+      ctx.shadowBlur = 16;
+      const auraGrad = ctx.createRadialGradient(x, y, 3, x, y, 16);
+      auraGrad.addColorStop(0, 'rgba(150,230,255,0.2)');
+      auraGrad.addColorStop(0.5, 'rgba(100,200,240,0.08)');
+      auraGrad.addColorStop(1, 'rgba(68,221,238,0)');
+      ctx.fillStyle = auraGrad;
+      ctx.beginPath();
+      ctx.arc(x, y, 16, 0, Math.PI * 2);
+      ctx.fill();
+      // Crystalline shard body (spinning 8-pointed star, bigger)
+      const crystalGrad = ctx.createRadialGradient(x - 1, y - 1, 0, x, y, 9);
+      crystalGrad.addColorStop(0, '#ffffff');
+      crystalGrad.addColorStop(0.3, '#ddf4ff');
+      crystalGrad.addColorStop(0.6, '#88ddff');
+      crystalGrad.addColorStop(1, 'rgba(68,221,238,0.1)');
+      ctx.fillStyle = crystalGrad;
       ctx.beginPath();
       for (let i = 0; i < 8; i++) {
         const angle = (Math.PI * 2 * i) / 8 + pt * 2;
-        const r = i % 2 === 0 ? 7 : 3.5;
+        const r = i % 2 === 0 ? 9 : 4;
         const px = x + Math.cos(angle) * r;
         const py = y + Math.sin(angle) * r;
         if (i === 0) ctx.moveTo(px, py);
@@ -3211,143 +3503,298 @@ export function drawProjectile(ctx: CanvasRenderingContext2D, proj: Projectile):
       }
       ctx.closePath();
       ctx.fill();
-      // Frost trail
-      for (let i = 1; i <= 2; i++) {
-        ctx.fillStyle = `rgba(180,230,255,${0.2 / i})`;
+      // Inner crystal facet highlight
+      ctx.fillStyle = 'rgba(255,255,255,0.4)';
+      ctx.beginPath();
+      const a0 = pt * 2;
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + Math.cos(a0) * 8, y + Math.sin(a0) * 8);
+      ctx.lineTo(x + Math.cos(a0 + Math.PI / 4) * 3.5, y + Math.sin(a0 + Math.PI / 4) * 3.5);
+      ctx.closePath();
+      ctx.fill();
+      // Snowflake microparticles in trail
+      for (let i = 1; i <= 4; i++) {
+        const tx = x - i * 5;
+        const ty = y + Math.sin(pt * 6 + i * 1.8) * 2.5;
+        const tAlpha = 0.35 / i;
+        const tSize = 3.5 / i;
+        ctx.fillStyle = `rgba(200,240,255,${tAlpha})`;
         ctx.beginPath();
-        ctx.arc(x - i * 5, y, 3 / i, 0, Math.PI * 2);
+        ctx.arc(tx, ty, tSize, 0, Math.PI * 2);
         ctx.fill();
+        // Tiny cross for snowflake
+        if (i <= 2) {
+          ctx.strokeStyle = `rgba(255,255,255,${tAlpha * 0.6})`;
+          ctx.lineWidth = 0.4;
+          ctx.beginPath();
+          ctx.moveTo(tx - tSize, ty); ctx.lineTo(tx + tSize, ty);
+          ctx.moveTo(tx, ty - tSize); ctx.lineTo(tx, ty + tSize);
+          ctx.stroke();
+        }
       }
+      ctx.shadowBlur = 0;
       break;
     }
     case 'POISON': {
+      // Toxic mist aura
       ctx.shadowColor = '#44cc44';
-      ctx.shadowBlur = 8;
-      const grad = ctx.createRadialGradient(x, y, 0, x, y, 5);
-      grad.addColorStop(0, '#aaffaa');
-      grad.addColorStop(0.5, '#55dd55');
-      grad.addColorStop(1, 'rgba(68,170,68,0)');
+      ctx.shadowBlur = 14;
+      const mistGrad = ctx.createRadialGradient(x, y, 2, x, y, 12);
+      mistGrad.addColorStop(0, 'rgba(100,255,100,0.15)');
+      mistGrad.addColorStop(0.6, 'rgba(68,200,68,0.06)');
+      mistGrad.addColorStop(1, 'rgba(40,160,40,0)');
+      ctx.fillStyle = mistGrad;
+      ctx.beginPath();
+      ctx.arc(x, y, 12, 0, Math.PI * 2);
+      ctx.fill();
+      // Core glob (bigger, bubbling)
+      const wobble = Math.sin(pt * 12) * 0.8;
+      const grad = ctx.createRadialGradient(x - 1, y - 1, 0, x, y, 7);
+      grad.addColorStop(0, '#ccffcc');
+      grad.addColorStop(0.3, '#88ff88');
+      grad.addColorStop(0.6, '#44dd44');
+      grad.addColorStop(1, 'rgba(40,180,40,0)');
       ctx.fillStyle = grad;
       ctx.beginPath();
-      ctx.arc(x, y, 5, 0, Math.PI * 2);
+      ctx.arc(x, y, 7 + wobble, 0, Math.PI * 2);
       ctx.fill();
-      // Drip trail
-      for (let i = 1; i <= 3; i++) {
+      // Bubble highlights
+      ctx.fillStyle = 'rgba(200,255,200,0.4)';
+      ctx.beginPath();
+      ctx.ellipse(x - 1.5, y - 2, 2, 1.2, -0.3, 0, Math.PI * 2);
+      ctx.fill();
+      // Dripping acid trail
+      for (let i = 1; i <= 5; i++) {
         const dx = x - i * 4;
-        const dy = y + i * 2 + Math.sin(pt * 5 + i) * 1.5;
-        ctx.fillStyle = `rgba(68,204,68,${0.35 / i})`;
+        const dy = y + i * 2.5 + Math.sin(pt * 5 + i * 1.3) * 2;
+        const da = 0.4 / i;
+        const dr = 3 / i;
+        ctx.fillStyle = `rgba(68,220,68,${da})`;
         ctx.beginPath();
-        ctx.arc(dx, dy, 2.5 / i, 0, Math.PI * 2);
+        // Teardrop shape for drips
+        ctx.arc(dx, dy, dr, 0, Math.PI * 2);
         ctx.fill();
+        if (i <= 2) {
+          ctx.fillStyle = `rgba(68,220,68,${da * 0.5})`;
+          ctx.beginPath();
+          ctx.moveTo(dx, dy - dr * 1.5);
+          ctx.quadraticCurveTo(dx + dr, dy, dx, dy + dr);
+          ctx.quadraticCurveTo(dx - dr, dy, dx, dy - dr * 1.5);
+          ctx.fill();
+        }
       }
+      ctx.shadowBlur = 0;
       break;
     }
     case 'LIGHTNING': {
+      // Electric field aura
       ctx.shadowColor = '#ffee44';
-      ctx.shadowBlur = 15;
-      // Bright core
-      ctx.fillStyle = '#ffffff';
+      ctx.shadowBlur = 22;
+      const fieldGrad = ctx.createRadialGradient(x, y, 2, x, y, 18);
+      fieldGrad.addColorStop(0, 'rgba(255,255,200,0.25)');
+      fieldGrad.addColorStop(0.4, 'rgba(255,255,100,0.08)');
+      fieldGrad.addColorStop(1, 'rgba(255,238,68,0)');
+      ctx.fillStyle = fieldGrad;
       ctx.beginPath();
-      ctx.arc(x, y, 4, 0, Math.PI * 2);
+      ctx.arc(x, y, 18, 0, Math.PI * 2);
       ctx.fill();
-      // Zigzag bolt (thick, jagged)
-      ctx.strokeStyle = 'rgba(255,255,100,0.9)';
-      ctx.lineWidth = 2.5;
+      // Bright energy core
+      const coreGrad = ctx.createRadialGradient(x, y, 0, x, y, 6);
+      coreGrad.addColorStop(0, '#ffffff');
+      coreGrad.addColorStop(0.3, '#ffffcc');
+      coreGrad.addColorStop(0.7, '#ffee44');
+      coreGrad.addColorStop(1, 'rgba(255,238,68,0)');
+      ctx.fillStyle = coreGrad;
       ctx.beginPath();
-      ctx.moveTo(x - 8, y - 5);
-      ctx.lineTo(x - 2, y - 1);
-      ctx.lineTo(x - 5, y + 1);
-      ctx.lineTo(x + 2, y + 2);
-      ctx.lineTo(x - 1, y + 4);
-      ctx.lineTo(x + 6, y + 6);
-      ctx.stroke();
-      // Second thinner bolt
-      ctx.strokeStyle = 'rgba(255,255,200,0.5)';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(x - 6, y - 3);
-      ctx.lineTo(x, y + 1);
-      ctx.lineTo(x - 3, y + 3);
-      ctx.lineTo(x + 5, y + 5);
-      ctx.stroke();
-      // Glow aura
-      const glowGrad = ctx.createRadialGradient(x, y, 0, x, y, 10);
-      glowGrad.addColorStop(0, 'rgba(255,255,150,0.2)');
-      glowGrad.addColorStop(1, 'rgba(255,255,100,0)');
-      ctx.fillStyle = glowGrad;
-      ctx.beginPath();
-      ctx.arc(x, y, 10, 0, Math.PI * 2);
+      ctx.arc(x, y, 6, 0, Math.PI * 2);
       ctx.fill();
+      // Primary lightning bolt (thick, jagged, bright)
+      ctx.strokeStyle = 'rgba(255,255,150,0.95)';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(x - 10, y - 7);
+      ctx.lineTo(x - 3, y - 2);
+      ctx.lineTo(x - 7, y + 1);
+      ctx.lineTo(x + 1, y + 2);
+      ctx.lineTo(x - 2, y + 5);
+      ctx.lineTo(x + 8, y + 8);
+      ctx.stroke();
+      // Secondary bolt (branching)
+      ctx.strokeStyle = 'rgba(255,255,200,0.6)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(x - 3, y - 2);
+      ctx.lineTo(x + 4, y - 5);
+      ctx.lineTo(x + 7, y - 2);
+      ctx.stroke();
+      // Third bolt (thin, electric)
+      ctx.strokeStyle = 'rgba(200,200,255,0.4)';
+      ctx.lineWidth = 0.8;
+      ctx.beginPath();
+      ctx.moveTo(x + 1, y + 2);
+      ctx.lineTo(x + 6, y);
+      ctx.lineTo(x + 10, y + 3);
+      ctx.stroke();
+      // Electric sparks at tips
+      const sparkCount = 4;
+      for (let i = 0; i < sparkCount; i++) {
+        const sa = pt * 15 + i * 3;
+        const sr = 8 + Math.sin(pt * 8 + i) * 4;
+        const sx = x + Math.cos(sa) * sr;
+        const sy = y + Math.sin(sa) * sr;
+        ctx.fillStyle = `rgba(255,255,200,${0.3 + Math.sin(pt * 12 + i * 2) * 0.2})`;
+        ctx.beginPath();
+        ctx.arc(sx, sy, 1.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.shadowBlur = 0;
       break;
     }
     case 'SNIPER': {
-      // Tracer bullet with long trail
-      const trailGrad = ctx.createLinearGradient(x - 20, y, x, y);
-      trailGrad.addColorStop(0, 'rgba(200,200,200,0)');
-      trailGrad.addColorStop(0.5, 'rgba(255,255,200,0.15)');
-      trailGrad.addColorStop(1, 'rgba(255,255,255,0.4)');
+      // Long laser-like tracer trail
+      const trailGrad = ctx.createLinearGradient(x - 35, y, x, y);
+      trailGrad.addColorStop(0, 'rgba(255,100,100,0)');
+      trailGrad.addColorStop(0.3, 'rgba(255,150,150,0.05)');
+      trailGrad.addColorStop(0.7, 'rgba(255,200,200,0.2)');
+      trailGrad.addColorStop(1, 'rgba(255,255,255,0.5)');
       ctx.strokeStyle = trailGrad;
-      ctx.lineWidth = 1;
+      ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.moveTo(x - 20, y);
+      ctx.moveTo(x - 35, y);
       ctx.lineTo(x, y);
       ctx.stroke();
-      // Bullet core
-      const bGrad = ctx.createLinearGradient(x - 4, y, x + 4, y);
-      bGrad.addColorStop(0, 'rgba(255,255,200,0)');
-      bGrad.addColorStop(0.5, '#eeeeee');
-      bGrad.addColorStop(1, 'rgba(255,255,200,0)');
+      // Inner bright trail
+      const innerTrail = ctx.createLinearGradient(x - 25, y, x, y);
+      innerTrail.addColorStop(0, 'rgba(255,255,255,0)');
+      innerTrail.addColorStop(0.5, 'rgba(255,255,255,0.15)');
+      innerTrail.addColorStop(1, 'rgba(255,255,255,0.6)');
+      ctx.strokeStyle = innerTrail;
+      ctx.lineWidth = 0.8;
+      ctx.beginPath();
+      ctx.moveTo(x - 25, y);
+      ctx.lineTo(x, y);
+      ctx.stroke();
+      // Bullet core (elongated, bright)
+      ctx.shadowColor = '#ff4444';
+      ctx.shadowBlur = 8;
+      const bGrad = ctx.createLinearGradient(x - 5, y - 2, x + 5, y + 2);
+      bGrad.addColorStop(0, 'rgba(255,200,150,0)');
+      bGrad.addColorStop(0.3, '#ffeecc');
+      bGrad.addColorStop(0.5, '#ffffff');
+      bGrad.addColorStop(0.7, '#ffeecc');
+      bGrad.addColorStop(1, 'rgba(255,200,150,0)');
       ctx.fillStyle = bGrad;
       ctx.beginPath();
-      ctx.ellipse(x, y, 6, 1.5, 0, 0, Math.PI * 2);
+      ctx.ellipse(x, y, 8, 2, 0, 0, Math.PI * 2);
       ctx.fill();
+      // Red tip glow
+      const tipGrad = ctx.createRadialGradient(x + 3, y, 0, x + 3, y, 3);
+      tipGrad.addColorStop(0, 'rgba(255,100,100,0.5)');
+      tipGrad.addColorStop(1, 'rgba(255,50,50,0)');
+      ctx.fillStyle = tipGrad;
+      ctx.beginPath();
+      ctx.arc(x + 3, y, 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
       break;
     }
     case 'FLAME': {
-      // Fireball with ember trail
-      const grad = ctx.createRadialGradient(x, y, 0, x, y, 8);
+      // Heat distortion aura
+      ctx.shadowColor = '#ff6600';
+      ctx.shadowBlur = 16;
+      const heatGrad = ctx.createRadialGradient(x, y, 4, x, y, 18);
+      heatGrad.addColorStop(0, 'rgba(255,150,50,0.15)');
+      heatGrad.addColorStop(0.5, 'rgba(255,80,20,0.05)');
+      heatGrad.addColorStop(1, 'rgba(200,30,0,0)');
+      ctx.fillStyle = heatGrad;
+      ctx.beginPath();
+      ctx.arc(x, y, 18, 0, Math.PI * 2);
+      ctx.fill();
+      // Fireball core (bigger, multi-layer)
+      const grad = ctx.createRadialGradient(x - 1, y - 1, 0, x, y, 11);
       grad.addColorStop(0, '#ffffff');
-      grad.addColorStop(0.15, '#ffff88');
-      grad.addColorStop(0.4, '#ff8833');
+      grad.addColorStop(0.1, '#ffffcc');
+      grad.addColorStop(0.25, '#ffff66');
+      grad.addColorStop(0.45, '#ff8833');
       grad.addColorStop(0.7, '#cc3300');
       grad.addColorStop(1, 'rgba(200,30,0,0)');
       ctx.fillStyle = grad;
       ctx.beginPath();
-      ctx.arc(x, y, 8, 0, Math.PI * 2);
+      ctx.arc(x, y, 11, 0, Math.PI * 2);
       ctx.fill();
-      // Ember trail
-      for (let i = 1; i <= 4; i++) {
-        const ex = x - i * 4;
-        const ey = y - i * 1.5 + Math.sin(pt * 10 + i * 2) * 2;
-        ctx.fillStyle = `rgba(255,${100 + i * 30},50,${0.4 / i})`;
+      // Flickering flame tongues
+      for (let i = 0; i < 4; i++) {
+        const flameAngle = pt * 8 + i * 1.57;
+        const flameLen = 5 + Math.sin(pt * 12 + i * 3) * 3;
+        const fx = x + Math.cos(flameAngle) * flameLen;
+        const fy = y + Math.sin(flameAngle) * flameLen;
+        const fGrad = ctx.createRadialGradient(fx, fy, 0, fx, fy, 4);
+        fGrad.addColorStop(0, 'rgba(255,200,50,0.4)');
+        fGrad.addColorStop(1, 'rgba(255,100,0,0)');
+        ctx.fillStyle = fGrad;
         ctx.beginPath();
-        ctx.arc(ex, ey, 2 / (i * 0.6), 0, Math.PI * 2);
+        ctx.arc(fx, fy, 4, 0, Math.PI * 2);
         ctx.fill();
       }
+      // Ember shower trail
+      for (let i = 1; i <= 6; i++) {
+        const ex = x - i * 4;
+        const ey = y - i * 2 + Math.sin(pt * 10 + i * 2) * 2.5;
+        const ea = 0.5 / i;
+        const er = 2.5 / (i * 0.5);
+        ctx.fillStyle = `rgba(255,${80 + i * 25},${20 + i * 8},${ea})`;
+        ctx.beginPath();
+        ctx.arc(ex, ey, er, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.shadowBlur = 0;
       break;
     }
     case 'WORD': {
       const time = pt;
       const hue = (time * 60) % 360;
+      // Rainbow aura
       ctx.shadowColor = `hsl(${hue}, 80%, 60%)`;
-      ctx.shadowBlur = 12;
-      const grad = ctx.createRadialGradient(x, y, 0, x, y, 6);
+      ctx.shadowBlur = 18;
+      const aura = ctx.createRadialGradient(x, y, 3, x, y, 14);
+      aura.addColorStop(0, `hsla(${hue}, 90%, 70%, 0.25)`);
+      aura.addColorStop(0.5, `hsla(${(hue + 60) % 360}, 80%, 60%, 0.08)`);
+      aura.addColorStop(1, `hsla(${(hue + 120) % 360}, 70%, 50%, 0)`);
+      ctx.fillStyle = aura;
+      ctx.beginPath();
+      ctx.arc(x, y, 14, 0, Math.PI * 2);
+      ctx.fill();
+      // Rainbow ring
+      ctx.strokeStyle = `hsla(${(hue + 90) % 360}, 80%, 65%, 0.3)`;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.ellipse(x, y, 8, 4, time * 2, 0, Math.PI * 2);
+      ctx.stroke();
+      // Core orb (bigger)
+      const grad = ctx.createRadialGradient(x - 1, y - 1, 0, x, y, 8);
       grad.addColorStop(0, '#ffffff');
-      grad.addColorStop(0.4, `hsl(${hue}, 80%, 70%)`);
-      grad.addColorStop(0.8, `hsl(${hue}, 80%, 50%)`);
+      grad.addColorStop(0.3, `hsl(${hue}, 90%, 80%)`);
+      grad.addColorStop(0.6, `hsl(${hue}, 80%, 60%)`);
       grad.addColorStop(1, `hsla(${hue}, 80%, 40%, 0)`);
       ctx.fillStyle = grad;
       ctx.beginPath();
-      ctx.arc(x, y, 6, 0, Math.PI * 2);
+      ctx.arc(x, y, 8, 0, Math.PI * 2);
       ctx.fill();
-      // Rainbow trail
-      for (let i = 1; i <= 3; i++) {
-        const tHue = (hue - i * 40 + 360) % 360;
-        ctx.fillStyle = `hsla(${tHue}, 80%, 60%, ${0.3 / i})`;
+      // Specular
+      ctx.fillStyle = 'rgba(255,255,255,0.45)';
+      ctx.beginPath();
+      ctx.ellipse(x - 2, y - 2.5, 2.5, 1.5, -0.3, 0, Math.PI * 2);
+      ctx.fill();
+      // Rainbow trail (more particles)
+      for (let i = 1; i <= 5; i++) {
+        const tHue = (hue - i * 35 + 360) % 360;
+        const ty = y + Math.sin(time * 6 + i * 1.5) * 2;
+        ctx.fillStyle = `hsla(${tHue}, 85%, 65%, ${0.4 / i})`;
         ctx.beginPath();
-        ctx.arc(x - i * 5, y, 3 / i, 0, Math.PI * 2);
+        ctx.arc(x - i * 4.5, ty, 3.5 / i, 0, Math.PI * 2);
         ctx.fill();
       }
+      ctx.shadowBlur = 0;
       break;
     }
     default: {
@@ -3374,63 +3821,136 @@ export function drawEffects(ctx: CanvasRenderingContext2D, effects: VisualEffect
 
     switch (effect.type) {
       case 'explosion': {
-        const r = effect.radius * (0.5 + progress * 0.5);
+        const r = effect.radius * (0.4 + progress * 0.6);
 
-        // Core explosion
+        // Ground scorching (persistent dark mark)
+        if (progress < 0.8) {
+          ctx.fillStyle = `rgba(40,20,0,${alpha * 0.15})`;
+          ctx.beginPath();
+          ctx.ellipse(x, y + r * 0.2, r * 0.8, r * 0.3, 0, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        // Outer shockwave ring (expanding fast)
+        const shockR = r * (1 + progress * 1.2);
+        ctx.strokeStyle = `rgba(255,200,100,${alpha * 0.35})`;
+        ctx.lineWidth = 3 * (1 - progress);
+        ctx.beginPath();
+        ctx.arc(x, y, shockR, 0, Math.PI * 2);
+        ctx.stroke();
+        // Second inner shockwave
+        ctx.strokeStyle = `rgba(255,150,50,${alpha * 0.25})`;
+        ctx.lineWidth = 2 * (1 - progress);
+        ctx.beginPath();
+        ctx.arc(x, y, shockR * 0.7, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Core explosion (multi-layer)
         const grad = ctx.createRadialGradient(x, y, 0, x, y, r);
-        grad.addColorStop(0, `rgba(255,255,200,${alpha})`);
-        grad.addColorStop(0.3, `rgba(255,200,50,${alpha * 0.8})`);
-        grad.addColorStop(0.6, `rgba(255,100,20,${alpha * 0.5})`);
-        grad.addColorStop(1, 'rgba(200,50,0,0)');
+        grad.addColorStop(0, `rgba(255,255,240,${alpha})`);
+        grad.addColorStop(0.15, `rgba(255,255,150,${alpha * 0.9})`);
+        grad.addColorStop(0.35, `rgba(255,200,50,${alpha * 0.7})`);
+        grad.addColorStop(0.6, `rgba(255,100,20,${alpha * 0.4})`);
+        grad.addColorStop(0.85, `rgba(200,50,0,${alpha * 0.15})`);
+        grad.addColorStop(1, 'rgba(100,20,0,0)');
         ctx.fillStyle = grad;
         ctx.beginPath();
         ctx.arc(x, y, r, 0, Math.PI * 2);
         ctx.fill();
 
-        // Shockwave ring
-        ctx.strokeStyle = `rgba(255,180,50,${alpha * 0.4})`;
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.arc(x, y, r * 1.4, 0, Math.PI * 2);
-        ctx.stroke();
-
-        // Debris particles
-        for (let i = 0; i < 6; i++) {
-          const angle = (Math.PI * 2 * i) / 6 + progress;
-          const dist = r * progress * 1.2;
-          const px = x + Math.cos(angle) * dist;
-          const py = y + Math.sin(angle) * dist;
-          ctx.fillStyle = `rgba(255,150,50,${alpha * 0.6})`;
+        // Bright flash at center (early phase)
+        if (progress < 0.3) {
+          const flashAlpha = (0.3 - progress) / 0.3;
+          ctx.fillStyle = `rgba(255,255,255,${flashAlpha * 0.6})`;
           ctx.beginPath();
-          ctx.arc(px, py, 2 * (1 - progress), 0, Math.PI * 2);
+          ctx.arc(x, y, r * 0.4, 0, Math.PI * 2);
           ctx.fill();
+        }
+
+        // Debris/spark particles (more, varied sizes)
+        for (let i = 0; i < 10; i++) {
+          const angle = (Math.PI * 2 * i) / 10 + progress * 0.5 + i * 0.3;
+          const dist = r * progress * (1.2 + Math.sin(i * 1.7) * 0.3);
+          const px = x + Math.cos(angle) * dist;
+          const py = y + Math.sin(angle) * dist - progress * 3;
+          const sparkSize = (2.5 - i * 0.15) * (1 - progress);
+          const sparkAlpha = alpha * (0.7 - i * 0.05);
+          if (sparkAlpha > 0 && sparkSize > 0.2) {
+            const sparkGrad = ctx.createRadialGradient(px, py, 0, px, py, sparkSize * 1.5);
+            sparkGrad.addColorStop(0, `rgba(255,200,80,${sparkAlpha})`);
+            sparkGrad.addColorStop(1, `rgba(255,100,30,0)`);
+            ctx.fillStyle = sparkGrad;
+            ctx.beginPath();
+            ctx.arc(px, py, sparkSize * 1.5, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+
+        // Rising smoke wisps (late phase)
+        if (progress > 0.3) {
+          for (let i = 0; i < 3; i++) {
+            const sx = x + (i - 1) * r * 0.3;
+            const sy = y - progress * r * 0.8 - i * 3;
+            const smokeAlpha = alpha * 0.12;
+            const smokeR = r * 0.25 + progress * r * 0.2;
+            ctx.fillStyle = `rgba(80,70,60,${smokeAlpha})`;
+            ctx.beginPath();
+            ctx.arc(sx, sy, smokeR, 0, Math.PI * 2);
+            ctx.fill();
+          }
         }
         break;
       }
 
       case 'lightning': {
-        ctx.strokeStyle = `rgba(255,255,100,${alpha})`;
-        ctx.lineWidth = 2;
         ctx.shadowColor = '#ffff44';
-        ctx.shadowBlur = 12;
+        ctx.shadowBlur = 18;
 
-        for (let i = 0; i < 3; i++) {
+        // Bright flash at impact point (early)
+        if (progress < 0.4) {
+          const flashA = (0.4 - progress) / 0.4;
+          ctx.fillStyle = `rgba(255,255,220,${flashA * 0.4})`;
+          ctx.beginPath();
+          ctx.arc(x, y, effect.radius * 0.6, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        // Ground scorch circle
+        ctx.fillStyle = `rgba(255,255,100,${alpha * 0.08})`;
+        ctx.beginPath();
+        ctx.ellipse(x, y + effect.radius * 0.15, effect.radius * 0.5, effect.radius * 0.15, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Multiple lightning bolts (deterministic, no random)
+        for (let i = 0; i < 4; i++) {
+          const boltAlpha = alpha * (0.9 - i * 0.15);
+          ctx.strokeStyle = `rgba(255,255,${150 + i * 25},${boltAlpha})`;
+          ctx.lineWidth = 2.5 - i * 0.4;
           ctx.beginPath();
           ctx.moveTo(x, y - effect.radius);
           let cy = y - effect.radius;
+          const seed = progress * 100 + i * 17;
+          let step = 0;
           while (cy < y + effect.radius) {
-            const nx = x + (Math.random() - 0.5) * effect.radius;
-            cy += effect.radius * 0.3 + Math.random() * effect.radius * 0.2;
+            step++;
+            const nx = x + Math.sin(seed + step * 4.7 + i * 2.3) * effect.radius * (0.4 + i * 0.1);
+            cy += effect.radius * 0.25 + Math.abs(Math.sin(seed + step * 3.1)) * effect.radius * 0.2;
             ctx.lineTo(nx, Math.min(cy, y + effect.radius));
           }
           ctx.stroke();
         }
 
-        // Flash
-        ctx.fillStyle = `rgba(255,255,200,${alpha * 0.15})`;
-        ctx.beginPath();
-        ctx.arc(x, y, effect.radius * 0.8, 0, Math.PI * 2);
-        ctx.fill();
+        // Electric sparks radiating outward
+        for (let i = 0; i < 6; i++) {
+          const sa = (Math.PI * 2 * i) / 6 + progress * 2;
+          const sd = effect.radius * progress * 0.8;
+          const sx = x + Math.cos(sa) * sd;
+          const sy = y + Math.sin(sa) * sd;
+          ctx.fillStyle = `rgba(255,255,200,${alpha * 0.5})`;
+          ctx.beginPath();
+          ctx.arc(sx, sy, 1.5 * (1 - progress), 0, Math.PI * 2);
+          ctx.fill();
+        }
 
         ctx.shadowBlur = 0;
         break;
@@ -3439,30 +3959,68 @@ export function drawEffects(ctx: CanvasRenderingContext2D, effects: VisualEffect
       case 'ice': {
         const r = effect.radius * (0.3 + progress * 0.7);
 
-        // Frost field
+        // Ground frost circle (persistent feel)
+        ctx.fillStyle = `rgba(180,230,255,${alpha * 0.1})`;
+        ctx.beginPath();
+        ctx.ellipse(x, y + r * 0.15, r * 1.1, r * 0.35, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Frost burst field (multi-layer)
         const iceGrad = ctx.createRadialGradient(x, y, 0, x, y, r);
-        iceGrad.addColorStop(0, `rgba(150,230,255,${alpha * 0.4})`);
-        iceGrad.addColorStop(1, `rgba(100,200,255,0)`);
+        iceGrad.addColorStop(0, `rgba(200,240,255,${alpha * 0.5})`);
+        iceGrad.addColorStop(0.3, `rgba(150,220,255,${alpha * 0.3})`);
+        iceGrad.addColorStop(0.7, `rgba(100,200,255,${alpha * 0.1})`);
+        iceGrad.addColorStop(1, 'rgba(80,180,255,0)');
         ctx.fillStyle = iceGrad;
         ctx.beginPath();
         ctx.arc(x, y, r, 0, Math.PI * 2);
         ctx.fill();
 
-        // Crystals
-        ctx.strokeStyle = `rgba(200,240,255,${alpha * 0.7})`;
-        ctx.lineWidth = 1.5;
-        for (let i = 0; i < 6; i++) {
-          const angle = (Math.PI * 2 * i) / 6 + progress * 2;
-          const cr = r * 0.6;
+        // Ice crystal spikes radiating outward
+        for (let i = 0; i < 8; i++) {
+          const angle = (Math.PI * 2 * i) / 8 + progress * 1.5;
+          const cr = r * (0.5 + progress * 0.3);
+          const tipX = x + cr * Math.cos(angle);
+          const tipY = y + cr * Math.sin(angle);
+          // Crystal spike (diamond shape)
+          ctx.fillStyle = `rgba(200,240,255,${alpha * 0.6})`;
           ctx.beginPath();
-          ctx.moveTo(x, y);
-          ctx.lineTo(x + cr * Math.cos(angle), y + cr * Math.sin(angle));
+          ctx.moveTo(x + cr * 0.2 * Math.cos(angle), y + cr * 0.2 * Math.sin(angle));
+          ctx.lineTo(tipX + 2 * Math.cos(angle + Math.PI / 2), tipY + 2 * Math.sin(angle + Math.PI / 2));
+          ctx.lineTo(tipX + 3 * Math.cos(angle), tipY + 3 * Math.sin(angle));
+          ctx.lineTo(tipX + 2 * Math.cos(angle - Math.PI / 2), tipY + 2 * Math.sin(angle - Math.PI / 2));
+          ctx.closePath();
+          ctx.fill();
+          // Crystal highlight
+          ctx.strokeStyle = `rgba(255,255,255,${alpha * 0.4})`;
+          ctx.lineWidth = 0.8;
+          ctx.beginPath();
+          ctx.moveTo(x + cr * 0.3 * Math.cos(angle), y + cr * 0.3 * Math.sin(angle));
+          ctx.lineTo(tipX + 2 * Math.cos(angle), tipY + 2 * Math.sin(angle));
           ctx.stroke();
+        }
 
-          // Crystal tips
-          ctx.fillStyle = `rgba(220,250,255,${alpha * 0.5})`;
+        // Snowflake particles drifting
+        for (let i = 0; i < 6; i++) {
+          const pAngle = (Math.PI * 2 * i) / 6 + progress * 3;
+          const pDist = r * progress * 0.9;
+          const px = x + Math.cos(pAngle) * pDist;
+          const py = y + Math.sin(pAngle) * pDist - progress * 4;
+          const pSize = 2 * (1 - progress);
+          if (pSize > 0.3) {
+            ctx.fillStyle = `rgba(220,245,255,${alpha * 0.5})`;
+            ctx.beginPath();
+            ctx.arc(px, py, pSize, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+
+        // Central bright flash (early)
+        if (progress < 0.25) {
+          const flashA = (0.25 - progress) / 0.25;
+          ctx.fillStyle = `rgba(220,245,255,${flashA * 0.4})`;
           ctx.beginPath();
-          ctx.arc(x + cr * Math.cos(angle), y + cr * Math.sin(angle), 2, 0, Math.PI * 2);
+          ctx.arc(x, y, r * 0.3, 0, Math.PI * 2);
           ctx.fill();
         }
         break;
@@ -3509,69 +4067,164 @@ export function drawEffects(ctx: CanvasRenderingContext2D, effects: VisualEffect
       }
 
       case 'flame': {
-        const r = effect.radius * (0.5 + progress * 0.5);
+        const r = effect.radius * (0.4 + progress * 0.6);
+
+        // Ground scorch
+        ctx.fillStyle = `rgba(40,15,0,${alpha * 0.12})`;
+        ctx.beginPath();
+        ctx.ellipse(x, y + r * 0.2, r * 0.9, r * 0.25, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Heat wave ring
+        ctx.strokeStyle = `rgba(255,150,50,${alpha * 0.2})`;
+        ctx.lineWidth = 2 * (1 - progress);
+        ctx.beginPath();
+        ctx.arc(x, y, r * 1.3, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Core fire burst (multi-layer)
         const grad = ctx.createRadialGradient(x, y, 0, x, y, r);
-        grad.addColorStop(0, `rgba(255,255,150,${alpha * 0.8})`);
-        grad.addColorStop(0.3, `rgba(255,150,30,${alpha * 0.6})`);
-        grad.addColorStop(0.7, `rgba(255,50,0,${alpha * 0.3})`);
-        grad.addColorStop(1, 'rgba(200,30,0,0)');
+        grad.addColorStop(0, `rgba(255,255,220,${alpha * 0.9})`);
+        grad.addColorStop(0.15, `rgba(255,255,100,${alpha * 0.7})`);
+        grad.addColorStop(0.35, `rgba(255,180,30,${alpha * 0.5})`);
+        grad.addColorStop(0.6, `rgba(255,80,0,${alpha * 0.3})`);
+        grad.addColorStop(0.85, `rgba(180,30,0,${alpha * 0.1})`);
+        grad.addColorStop(1, 'rgba(100,10,0,0)');
         ctx.fillStyle = grad;
         ctx.beginPath();
         ctx.arc(x, y, r, 0, Math.PI * 2);
         ctx.fill();
 
-        // Embers
-        for (let i = 0; i < 4; i++) {
-          const angle = (Math.PI * 2 * i) / 4 + progress * 3;
-          const dist = r * 0.7 * progress;
-          const ex = x + Math.cos(angle) * dist;
-          const ey = y + Math.sin(angle) * dist - progress * 10;
-          ctx.fillStyle = `rgba(255,200,50,${alpha * 0.5})`;
+        // Flash at center (early)
+        if (progress < 0.2) {
+          const flashA = (0.2 - progress) / 0.2;
+          ctx.fillStyle = `rgba(255,255,255,${flashA * 0.5})`;
           ctx.beginPath();
-          ctx.arc(ex, ey, 1.5 * (1 - progress), 0, Math.PI * 2);
+          ctx.arc(x, y, r * 0.3, 0, Math.PI * 2);
           ctx.fill();
+        }
+
+        // Rising fire tongues
+        for (let i = 0; i < 5; i++) {
+          const angle = (Math.PI * 2 * i) / 5 + progress * 2;
+          const dist = r * 0.5 * progress;
+          const fx = x + Math.cos(angle) * dist;
+          const fy = y + Math.sin(angle) * dist - progress * r * 0.6;
+          const fSize = r * 0.25 * (1 - progress);
+          if (fSize > 0.5) {
+            const fGrad = ctx.createRadialGradient(fx, fy, 0, fx, fy, fSize);
+            fGrad.addColorStop(0, `rgba(255,220,80,${alpha * 0.5})`);
+            fGrad.addColorStop(1, `rgba(255,80,0,0)`);
+            ctx.fillStyle = fGrad;
+            ctx.beginPath();
+            ctx.arc(fx, fy, fSize, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+
+        // Ember shower (more particles, rising)
+        for (let i = 0; i < 8; i++) {
+          const eAngle = (Math.PI * 2 * i) / 8 + progress * 3 + i * 0.5;
+          const eDist = r * progress * (0.8 + Math.sin(i * 2.1) * 0.3);
+          const ex = x + Math.cos(eAngle) * eDist;
+          const ey = y + Math.sin(eAngle) * eDist - progress * 12;
+          const eSize = 1.8 * (1 - progress);
+          if (eSize > 0.3) {
+            ctx.fillStyle = `rgba(255,${150 + i * 12},50,${alpha * 0.5})`;
+            ctx.beginPath();
+            ctx.arc(ex, ey, eSize, 0, Math.PI * 2);
+            ctx.fill();
+          }
         }
         break;
       }
 
       case 'merge': {
-        // Sparkle burst with glow
+        // Bright merge flash (early)
+        if (progress < 0.2) {
+          const fA = (0.2 - progress) / 0.2;
+          ctx.fillStyle = `rgba(220,200,255,${fA * 0.5})`;
+          ctx.beginPath();
+          ctx.arc(x, y, effect.radius * 0.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        // Expanding magic circle
+        const circR = effect.radius * progress * 1.3;
+        ctx.strokeStyle = `rgba(200,150,255,${alpha * 0.4})`;
+        ctx.lineWidth = 2 * (1 - progress);
+        ctx.beginPath();
+        ctx.arc(x, y, circR, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Spiral sparkle burst
         const grad = ctx.createRadialGradient(x, y, 0, x, y, effect.radius * progress);
-        grad.addColorStop(0, `rgba(200,150,255,${alpha * 0.3})`);
-        grad.addColorStop(1, 'rgba(200,150,255,0)');
+        grad.addColorStop(0, `rgba(220,180,255,${alpha * 0.3})`);
+        grad.addColorStop(0.5, `rgba(180,120,255,${alpha * 0.15})`);
+        grad.addColorStop(1, 'rgba(150,80,255,0)');
         ctx.fillStyle = grad;
         ctx.beginPath();
         ctx.arc(x, y, effect.radius * progress, 0, Math.PI * 2);
         ctx.fill();
 
-        for (let i = 0; i < 8; i++) {
-          const angle = (Math.PI * 2 * i) / 8;
-          const dist = effect.radius * progress;
+        // Star particles (12, spiraling)
+        for (let i = 0; i < 12; i++) {
+          const angle = (Math.PI * 2 * i) / 12 + progress * 4;
+          const dist = effect.radius * progress * (0.8 + Math.sin(i * 1.3) * 0.3);
           const px = x + dist * Math.cos(angle);
           const py = y + dist * Math.sin(angle);
-          ctx.fillStyle = `rgba(220,180,255,${alpha})`;
-          ctx.beginPath();
-          ctx.arc(px, py, 3 * (1 - progress), 0, Math.PI * 2);
-          ctx.fill();
+          const pSize = 3 * (1 - progress);
+          if (pSize > 0.3) {
+            const pGrad = ctx.createRadialGradient(px, py, 0, px, py, pSize * 1.5);
+            pGrad.addColorStop(0, `rgba(255,220,255,${alpha})`);
+            pGrad.addColorStop(1, `rgba(180,100,255,0)`);
+            ctx.fillStyle = pGrad;
+            ctx.beginPath();
+            ctx.arc(px, py, pSize * 1.5, 0, Math.PI * 2);
+            ctx.fill();
+          }
         }
         break;
       }
 
       case 'death': {
-        for (let i = 0; i < 8; i++) {
-          const angle = (Math.PI * 2 * i) / 8 + progress * 2;
-          const dist = effect.radius * progress * 2;
-          const px = x + dist * Math.cos(angle);
-          const py = y + dist * Math.sin(angle) - progress * 5;
-          const pAlpha = alpha * 0.7;
-          const pSize = 3 * (1 - progress);
+        // Dark soul-departure burst
+        const soulGrad = ctx.createRadialGradient(x, y, 0, x, y, effect.radius * progress);
+        soulGrad.addColorStop(0, `rgba(80,0,0,${alpha * 0.2})`);
+        soulGrad.addColorStop(0.5, `rgba(150,50,50,${alpha * 0.1})`);
+        soulGrad.addColorStop(1, 'rgba(100,0,0,0)');
+        ctx.fillStyle = soulGrad;
+        ctx.beginPath();
+        ctx.arc(x, y, effect.radius * progress * 1.5, 0, Math.PI * 2);
+        ctx.fill();
 
-          const pGrad = ctx.createRadialGradient(px, py, 0, px, py, pSize);
-          pGrad.addColorStop(0, `rgba(255,100,100,${pAlpha})`);
-          pGrad.addColorStop(1, `rgba(255,50,50,0)`);
-          ctx.fillStyle = pGrad;
+        // Red energy particles (more, varied)
+        for (let i = 0; i < 12; i++) {
+          const angle = (Math.PI * 2 * i) / 12 + progress * 2.5;
+          const dist = effect.radius * progress * (1.5 + Math.sin(i * 1.3) * 0.5);
+          const px = x + dist * Math.cos(angle);
+          const py = y + dist * Math.sin(angle) - progress * 8;
+          const pAlpha = alpha * (0.7 - i * 0.04);
+          const pSize = (3.5 - i * 0.15) * (1 - progress);
+
+          if (pAlpha > 0 && pSize > 0.3) {
+            const pGrad = ctx.createRadialGradient(px, py, 0, px, py, pSize * 1.5);
+            pGrad.addColorStop(0, `rgba(255,120,120,${pAlpha})`);
+            pGrad.addColorStop(0.5, `rgba(255,60,60,${pAlpha * 0.5})`);
+            pGrad.addColorStop(1, 'rgba(200,30,30,0)');
+            ctx.fillStyle = pGrad;
+            ctx.beginPath();
+            ctx.arc(px, py, pSize * 1.5, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+
+        // Skull-like flash at center (very early)
+        if (progress < 0.15) {
+          const flashA = (0.15 - progress) / 0.15;
+          ctx.fillStyle = `rgba(255,200,200,${flashA * 0.5})`;
           ctx.beginPath();
-          ctx.arc(px, py, pSize * 1.5, 0, Math.PI * 2);
+          ctx.arc(x, y, effect.radius * 0.4, 0, Math.PI * 2);
           ctx.fill();
         }
         break;
@@ -3589,35 +4242,67 @@ export function drawDamageTexts(ctx: CanvasRenderingContext2D, texts: DamageText
 
   for (const text of texts) {
     const progress = text.elapsed / text.duration;
-    const alpha = 1 - progress;
-    const scale = text.isCrit ? 1.3 + (1 - progress) * 0.3 : 1;
+    const alpha = Math.min(1, 1.2 - progress * 1.2); // Fade starts slightly later
+    const scale = text.isCrit
+      ? 1.4 + Math.max(0, (0.3 - progress) * 1.5) // Pop-in effect for crits
+      : 1 + Math.max(0, (0.15 - progress) * 2); // Subtle pop for normal
 
+    if (alpha <= 0) continue;
     ctx.globalAlpha = alpha;
 
-    const fontSize = text.isCrit ? 16 : 12;
+    const fontSize = text.isCrit ? 18 : 13;
     ctx.font = `bold ${Math.round(fontSize * scale)}px sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
-    // Drop shadow
-    ctx.fillStyle = 'rgba(0,0,0,0.5)';
-    ctx.fillText(text.text, text.position.x + 1, text.position.y + 1);
+    const tx = text.position.x;
+    const ty = text.position.y;
 
-    // Outline
-    ctx.strokeStyle = 'rgba(0,0,0,0.7)';
-    ctx.lineWidth = 2.5;
-    ctx.strokeText(text.text, text.position.x, text.position.y);
+    // Drop shadow (deeper)
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillText(text.text, tx + 1.5, ty + 1.5);
 
-    // Fill
+    // Thick outline
+    ctx.strokeStyle = 'rgba(0,0,0,0.8)';
+    ctx.lineWidth = 3.5;
+    ctx.lineJoin = 'round';
+    ctx.strokeText(text.text, tx, ty);
+
+    // Main fill
     ctx.fillStyle = text.color;
-    ctx.fillText(text.text, text.position.x, text.position.y);
+    ctx.fillText(text.text, tx, ty);
 
-    // Crit glow
+    // Inner highlight (top half lighter)
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(tx - 50, ty - 20, 100, 10);
+    ctx.clip();
+    ctx.fillStyle = 'rgba(255,255,255,0.25)';
+    ctx.fillText(text.text, tx, ty);
+    ctx.restore();
+
+    // Crit glow + starburst
     if (text.isCrit) {
       ctx.shadowColor = text.color;
-      ctx.shadowBlur = 8;
-      ctx.fillText(text.text, text.position.x, text.position.y);
+      ctx.shadowBlur = 12;
+      ctx.fillStyle = text.color;
+      ctx.fillText(text.text, tx, ty);
       ctx.shadowBlur = 0;
+
+      // Starburst rays on early crit
+      if (progress < 0.3) {
+        const rayAlpha = (0.3 - progress) / 0.3 * alpha * 0.3;
+        ctx.strokeStyle = `rgba(255,255,200,${rayAlpha})`;
+        ctx.lineWidth = 1;
+        for (let i = 0; i < 6; i++) {
+          const angle = (Math.PI * 2 * i) / 6;
+          const len = fontSize * scale * 0.8;
+          ctx.beginPath();
+          ctx.moveTo(tx + Math.cos(angle) * len * 0.3, ty + Math.sin(angle) * len * 0.3);
+          ctx.lineTo(tx + Math.cos(angle) * len, ty + Math.sin(angle) * len);
+          ctx.stroke();
+        }
+      }
     }
   }
 

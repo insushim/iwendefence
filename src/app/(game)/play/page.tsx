@@ -30,7 +30,7 @@ const LEGENDARY_TYPES = new Set([TowerType.METEOR, TowerType.VOID, TowerType.PHO
 const BASIC_TYPES = [TowerType.ARCHER, TowerType.ICE, TowerType.POISON, TowerType.BARRICADE];
 const ADVANCED_TYPES = [TowerType.MAGIC, TowerType.CANNON, TowerType.LIGHTNING, TowerType.SNIPER, TowerType.FLAME, TowerType.HEALER, TowerType.GOLDMINE, TowerType.WORD];
 const LEGENDARY_LIST = [TowerType.METEOR, TowerType.VOID, TowerType.PHOENIX, TowerType.CHRONO, TowerType.DIVINE];
-const RANDOM_TOWER_COST = 80;
+const RANDOM_TOWER_COST = 150;
 
 function rollRandomTower(): TowerType {
   const roll = Math.random();
@@ -541,53 +541,90 @@ function PlayPageContent() {
       />
 
       {/* Stage Info Banner */}
-      <div className="relative z-10 flex items-center justify-center gap-3 py-1 bg-gradient-to-r from-indigo-600/20 via-purple-600/20 to-indigo-600/20 border-b border-indigo-500/20">
-        <span className="text-xs font-bold text-indigo-300">
-          월드 {worldId} - 스테이지 {stageId}
-        </span>
-        <div className="text-xs text-slate-400">
-          웨이브 {wave}/{totalWaves}
-        </div>
-        {/* Quiz combo indicator */}
-        {quizCombo > 0 && (
-          <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-orange-500/20 border border-orange-500/30">
-            <span className="text-[10px] font-bold text-orange-300">{quizCombo} COMBO</span>
+      <div className="relative z-10 glass-shimmer stage-banner-border">
+        <div className="flex items-center justify-center gap-3 py-1.5 px-4"
+          style={{
+            background: 'linear-gradient(90deg, rgba(99,102,241,0.08), rgba(147,51,234,0.12), rgba(6,182,212,0.08))',
+          }}
+        >
+          <div className="flex items-center gap-2">
+            <div className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
+            <span className="text-xs font-bold text-indigo-200 tracking-wide text-glow">
+              W{worldId}-{stageId}
+            </span>
           </div>
-        )}
+
+          {/* Wave progress mini bar */}
+          <div className="flex items-center gap-2">
+            <div className="relative w-20 h-1.5 rounded-full bg-slate-800/80 overflow-hidden">
+              <div
+                className="absolute inset-y-0 left-0 rounded-full wave-progress-bar"
+                style={{ width: totalWaves > 0 ? `${(wave / totalWaves) * 100}%` : '0%' }}
+              />
+            </div>
+            <span className="text-[10px] font-bold text-slate-300 tabular-nums">
+              {wave}<span className="text-slate-500">/{totalWaves}</span>
+            </span>
+          </div>
+
+          {/* Quiz combo indicator */}
+          {quizCombo > 0 && (
+            <div className="flex items-center gap-1 px-2 py-0.5 rounded-full border animate-pulse-glow"
+              style={{
+                background: 'linear-gradient(135deg, rgba(245,158,11,0.15), rgba(239,68,68,0.1))',
+                borderColor: 'rgba(245,158,11,0.35)',
+              }}
+            >
+              <span className="text-[10px] font-black text-orange-300 text-glow-gold">{quizCombo} COMBO</span>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Game Canvas Area */}
-      <div ref={containerRef} className="flex-1 relative flex items-center justify-center bg-[#1a2435]">
-        <canvas
-          ref={canvasRef}
-          className="block cursor-pointer touch-none"
-          onClick={handleCanvasTap}
-          onMouseMove={handleCanvasMouseMove}
-          onMouseLeave={handleCanvasMouseLeave}
-          onTouchMove={handleCanvasTouchMove}
-          style={{ imageRendering: 'pixelated' }}
-        />
+      <div ref={containerRef} className="flex-1 relative flex items-center justify-center bg-[#0d1520]">
+        {/* Canvas wrapper with glow border + vignette */}
+        <div className="relative">
+          <canvas
+            ref={canvasRef}
+            className="block cursor-pointer touch-none rounded"
+            onClick={handleCanvasTap}
+            onMouseMove={handleCanvasMouseMove}
+            onMouseLeave={handleCanvasMouseLeave}
+            onTouchMove={handleCanvasTouchMove}
+            style={{ imageRendering: 'pixelated' }}
+          />
+          <div className="canvas-vignette rounded" />
+          <div className="canvas-glow-border" />
+        </div>
 
         {/* Wave start button overlay */}
         {!isGameOver && !showStageClear && (
-          <div className="absolute bottom-3 right-3 z-10">
+          <div className="absolute bottom-4 right-4 z-10">
             <motion.button
               whileTap={{ scale: 0.9 }}
+              whileHover={{ scale: 1.05 }}
               onClick={handleStartWave}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-500 text-white text-xs font-bold shadow-lg shadow-indigo-500/30"
+              className="relative flex items-center gap-2 px-4 py-2.5 rounded-2xl text-white text-xs font-bold animate-wave-btn-pulse glass-shimmer overflow-hidden"
+              style={{
+                background: 'linear-gradient(135deg, rgba(99,102,241,0.85), rgba(147,51,234,0.85))',
+                border: '1px solid rgba(165,180,252,0.3)',
+              }}
             >
-              <Swords className="w-3.5 h-3.5" />
-              <span>다음 웨이브</span>
+              <Swords className="w-4 h-4" />
+              <span className="tracking-wide">NEXT WAVE</span>
+              {/* Shine overlay */}
+              <div className="absolute inset-0 btn-shine-overlay opacity-60 pointer-events-none" />
             </motion.button>
           </div>
         )}
       </div>
 
       {/* Control Bar */}
-      <div className="bg-slate-900/90 backdrop-blur-xl border-t border-slate-700/50 safe-area-pb">
-        <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-800/50">
+      <div className="glass-dark safe-area-pb">
+        <div className="flex items-center gap-2 px-3 py-2" style={{ borderBottom: '1px solid rgba(71,85,105,0.15)' }}>
           <a href="/adventure">
-            <div className="w-9 h-9 rounded-xl bg-slate-800 flex items-center justify-center active:bg-slate-700">
+            <div className="w-9 h-9 rounded-xl ctrl-btn-glass flex items-center justify-center">
               <ArrowLeft className="w-4 h-4 text-slate-400" />
             </div>
           </a>
@@ -595,10 +632,16 @@ function PlayPageContent() {
           <motion.button
             whileTap={{ scale: 0.9 }}
             onClick={togglePause}
-            className="w-9 h-9 rounded-xl bg-slate-800 flex items-center justify-center active:bg-slate-700"
+            className={`w-9 h-9 rounded-xl ctrl-btn-glass flex items-center justify-center ${
+              isPaused ? 'border-emerald-500/30' : ''
+            }`}
+            style={isPaused ? {
+              boxShadow: '0 0 12px rgba(16,185,129,0.2)',
+              borderColor: 'rgba(16,185,129,0.3)',
+            } : undefined}
           >
             {isPaused ? (
-              <Play className="w-4 h-4 text-emerald-400" />
+              <Play className="w-4 h-4 text-emerald-400" style={{ filter: 'drop-shadow(0 0 4px rgba(16,185,129,0.5))' }} />
             ) : (
               <Pause className="w-4 h-4 text-slate-400" />
             )}
@@ -607,58 +650,91 @@ function PlayPageContent() {
           <motion.button
             whileTap={{ scale: 0.9 }}
             onClick={handleSpeedToggle}
-            className="h-9 px-3 rounded-xl bg-slate-800 flex items-center gap-1.5 text-sm active:bg-slate-700"
+            className="speed-badge h-9 px-3 rounded-xl ctrl-btn-glass flex items-center gap-1.5 text-sm"
+            data-fast={speed > 1 ? 'true' : 'false'}
           >
-            <FastForward className="w-4 h-4 text-amber-400" />
-            <span className="text-amber-400 font-bold tabular-nums">x{speed}</span>
+            <FastForward className="w-4 h-4 text-amber-400" style={speed > 1 ? { filter: 'drop-shadow(0 0 4px rgba(245,158,11,0.5))' } : undefined} />
+            <span className={`font-bold tabular-nums ${speed > 1 ? 'text-amber-300 text-glow-gold' : 'text-amber-400'}`}>x{speed}</span>
+            {speed === 3 && (
+              <span className="ml-0.5 px-1 py-px text-[8px] font-black rounded bg-amber-500/20 text-amber-300 uppercase tracking-wider">MAX</span>
+            )}
           </motion.button>
 
           <div className="flex-1" />
 
           <motion.button
             whileTap={{ scale: 0.9 }}
+            whileHover={{ scale: 1.03 }}
             onClick={handleManualQuiz}
-            className="h-9 px-3 rounded-xl bg-indigo-600 flex items-center gap-1.5 text-sm text-white font-medium active:bg-indigo-500"
+            className="relative h-9 px-4 rounded-xl flex items-center gap-1.5 text-sm text-white font-bold btn-glow overflow-hidden"
+            style={{
+              background: 'linear-gradient(135deg, rgba(99,102,241,0.8), rgba(79,70,229,0.9))',
+              border: '1px solid rgba(165,180,252,0.2)',
+              boxShadow: '0 0 12px rgba(99,102,241,0.2)',
+            }}
           >
-            <BookOpen className="w-4 h-4" />
-            <span>퀴즈</span>
+            <BookOpen className="w-4 h-4" style={{ filter: 'drop-shadow(0 0 4px rgba(165,180,252,0.6))' }} />
+            <span className="tracking-wide">QUIZ</span>
+            <div className="absolute inset-0 btn-shine-overlay opacity-40 pointer-events-none" />
           </motion.button>
         </div>
 
         {/* Tower Selection Bar */}
         <div className="overflow-x-auto scrollbar-hide">
-          <div className="flex gap-2 px-3 py-2 min-w-max">
+          <div className="flex gap-1.5 px-3 py-2 min-w-max">
             {/* Random Tower Button */}
             <motion.button
-              whileTap={{ scale: 0.95 }}
+              whileTap={{ scale: 0.93 }}
               onClick={handleRandomTowerSelect}
               className={`
-                flex flex-col items-center gap-0.5 p-2 rounded-xl min-w-[60px]
-                transition-all select-none relative
+                flex flex-col items-center gap-0.5 p-2 rounded-xl min-w-[62px]
+                transition-all select-none relative overflow-hidden
                 ${
                   isRandomTower
-                    ? 'bg-gradient-to-b from-purple-600/40 to-amber-600/40 border-2 border-amber-400 shadow-lg shadow-amber-500/20'
+                    ? 'animate-rainbow-border border-2 shadow-lg'
                     : gold >= RANDOM_TOWER_COST
-                      ? 'bg-gradient-to-b from-purple-900/60 to-amber-900/60 border-2 border-purple-500/50 hover:border-amber-400 active:bg-slate-700'
-                      : 'bg-slate-800/40 border-2 border-transparent opacity-40'
+                      ? 'border-2 border-purple-500/40 hover:border-amber-400/60'
+                      : 'border-2 border-transparent opacity-35'
                 }
               `}
+              style={
+                isRandomTower
+                  ? {
+                      background: 'linear-gradient(135deg, rgba(147,51,234,0.3), rgba(245,158,11,0.25))',
+                      boxShadow: '0 0 16px rgba(245,158,11,0.2), 0 0 32px rgba(147,51,234,0.1)',
+                    }
+                  : gold >= RANDOM_TOWER_COST
+                    ? {
+                        background: 'linear-gradient(180deg, rgba(88,28,135,0.35), rgba(120,53,15,0.3))',
+                      }
+                    : { background: 'rgba(30,41,59,0.3)' }
+              }
             >
-              <span className="text-xl leading-none">?</span>
-              <span className="text-[10px] text-amber-300 font-bold truncate w-full text-center">
+              <span className={`text-xl leading-none font-black ${isRandomTower || gold >= RANDOM_TOWER_COST ? 'animate-mystery' : ''}`}
+                style={{
+                  background: 'linear-gradient(135deg, #f59e0b, #ec4899, #8b5cf6, #06b6d4)',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: gold >= RANDOM_TOWER_COST ? 'transparent' : undefined,
+                }}
+              >?</span>
+              <span className="text-[10px] text-amber-200/90 font-bold truncate w-full text-center tracking-wide">
                 Random
               </span>
               <span
-                className={`text-[10px] font-bold tabular-nums ${
-                  gold >= RANDOM_TOWER_COST ? 'text-amber-400' : 'text-slate-600'
+                className={`text-[10px] font-bold tabular-nums px-1.5 py-px rounded-full ${
+                  gold >= RANDOM_TOWER_COST ? 'text-amber-300 bg-amber-500/15' : 'text-slate-600'
                 }`}
               >
                 {RANDOM_TOWER_COST}G
               </span>
+              {/* Shimmer overlay for random button */}
+              {gold >= RANDOM_TOWER_COST && (
+                <div className="absolute inset-0 btn-shine-overlay opacity-30 pointer-events-none rounded-xl" />
+              )}
             </motion.button>
 
             {/* Separator */}
-            <div className="w-px bg-slate-700/50 self-stretch my-1" />
+            <div className="tower-separator" />
 
             {towerList.map((tower) => {
               const isSelected = selectedTower === tower.type && !isRandomTower;
@@ -667,31 +743,55 @@ function PlayPageContent() {
               return (
                 <motion.button
                   key={tower.type}
-                  whileTap={{ scale: 0.95 }}
+                  whileTap={{ scale: 0.93 }}
+                  animate={isSelected ? { y: -2 } : { y: 0 }}
+                  transition={{ type: 'spring', stiffness: 400, damping: 25 }}
                   onClick={() => handleTowerSelect(tower.type)}
                   className={`
-                    flex flex-col items-center gap-0.5 p-2 rounded-xl min-w-[60px]
-                    transition-all select-none
+                    flex flex-col items-center gap-0.5 p-2 rounded-xl min-w-[62px]
+                    transition-colors select-none relative overflow-hidden
                     ${
                       isSelected
-                        ? 'bg-indigo-600/30 border-2 border-indigo-500 shadow-lg shadow-indigo-500/20'
+                        ? 'border-2 border-indigo-400 animate-tower-selected'
                         : canAfford
-                          ? 'bg-slate-800/80 border-2 border-transparent hover:border-slate-600 active:bg-slate-700'
-                          : 'bg-slate-800/40 border-2 border-transparent opacity-40'
+                          ? 'border border-slate-600/30 hover:border-slate-500/50'
+                          : 'border border-transparent opacity-35'
                     }
                   `}
+                  style={
+                    isSelected
+                      ? {
+                          background: 'linear-gradient(180deg, rgba(99,102,241,0.25), rgba(79,70,229,0.15))',
+                        }
+                      : canAfford
+                        ? {
+                            background: 'rgba(30,41,59,0.5)',
+                            backdropFilter: 'blur(4px)',
+                          }
+                        : { background: 'rgba(30,41,59,0.25)' }
+                  }
                 >
-                  <span className="text-xl leading-none">{tower.icon}</span>
-                  <span className="text-[10px] text-slate-400 font-medium truncate w-full text-center">
+                  <span className="text-xl leading-none" style={isSelected ? { filter: 'drop-shadow(0 0 6px rgba(99,102,241,0.5))' } : undefined}>
+                    {tower.icon}
+                  </span>
+                  <span className={`text-[10px] font-medium truncate w-full text-center ${isSelected ? 'text-indigo-200' : 'text-slate-400'}`}>
                     {tower.nameKr}
                   </span>
                   <span
-                    className={`text-[10px] font-bold tabular-nums ${
-                      canAfford ? 'text-amber-400' : 'text-slate-600'
+                    className={`text-[10px] font-bold tabular-nums px-1.5 py-px rounded-full ${
+                      isSelected
+                        ? 'text-amber-300 bg-amber-500/15'
+                        : canAfford
+                          ? 'text-amber-400/80'
+                          : 'text-slate-600'
                     }`}
                   >
                     {tower.cost}G
                   </span>
+                  {/* Selected shine overlay */}
+                  {isSelected && (
+                    <div className="absolute inset-0 btn-shine-overlay opacity-40 pointer-events-none rounded-xl" />
+                  )}
                 </motion.button>
               );
             })}
@@ -703,26 +803,64 @@ function PlayPageContent() {
       <AnimatePresence>
         {randomTowerNotif && (
           <motion.div
-            initial={{ y: 60, opacity: 0, scale: 0.8 }}
+            initial={{ y: 60, opacity: 0, scale: 0.5 }}
             animate={{ y: 0, opacity: 1, scale: 1 }}
-            exit={{ y: -30, opacity: 0, scale: 0.9 }}
+            exit={{ y: -40, opacity: 0, scale: 0.8 }}
+            transition={{ type: 'spring', stiffness: 350, damping: 20 }}
             className="absolute bottom-40 left-1/2 -translate-x-1/2 z-40 pointer-events-none"
           >
             <div className={`
-              flex items-center gap-2 px-5 py-3 rounded-2xl shadow-xl
+              relative flex items-center gap-3 px-6 py-3.5 rounded-2xl overflow-hidden
               ${randomTowerNotif.isLegendary
-                ? 'bg-gradient-to-r from-amber-600 to-yellow-500 border border-yellow-300/50'
-                : 'bg-gradient-to-r from-slate-700 to-slate-600 border border-slate-500/50'
+                ? 'animate-legendary-burst'
+                : 'glass'
               }
-            `}>
-              <span className="text-2xl">{randomTowerNotif.icon}</span>
-              <div className="text-center">
-                <p className={`text-xs font-bold ${randomTowerNotif.isLegendary ? 'text-yellow-100' : 'text-slate-300'}`}>
+            `}
+              style={randomTowerNotif.isLegendary ? {
+                background: 'linear-gradient(135deg, rgba(180,83,9,0.9), rgba(234,179,8,0.85), rgba(180,83,9,0.9))',
+                border: '2px solid rgba(253,224,71,0.5)',
+              } : {
+                border: '1px solid rgba(148,163,184,0.2)',
+              }}
+            >
+              {/* Background shimmer */}
+              {randomTowerNotif.isLegendary && (
+                <motion.div
+                  animate={{ opacity: [0.1, 0.3, 0.1] }}
+                  transition={{ repeat: Infinity, duration: 1 }}
+                  className="absolute inset-0 bg-gradient-to-r from-transparent via-yellow-300/20 to-transparent pointer-events-none"
+                />
+              )}
+              <motion.span
+                initial={{ scale: 0, rotate: -180 }}
+                animate={{ scale: 1, rotate: 0 }}
+                transition={{ type: 'spring', stiffness: 300, delay: 0.1 }}
+                className="text-3xl relative z-10"
+                style={randomTowerNotif.isLegendary ? { filter: 'drop-shadow(0 0 8px rgba(253,224,71,0.6))' } : undefined}
+              >
+                {randomTowerNotif.icon}
+              </motion.span>
+              <div className="text-center relative z-10">
+                <motion.p
+                  initial={{ x: -20, opacity: 0 }}
+                  animate={{ x: 0, opacity: 1 }}
+                  transition={{ delay: 0.15 }}
+                  className={`text-[10px] font-bold tracking-widest uppercase ${
+                    randomTowerNotif.isLegendary ? 'text-yellow-100 text-glow-gold' : 'text-slate-300'
+                  }`}
+                >
                   {randomTowerNotif.isLegendary ? 'LEGENDARY!' : 'Got Tower!'}
-                </p>
-                <p className={`text-sm font-black ${randomTowerNotif.isLegendary ? 'text-white' : 'text-white'}`}>
+                </motion.p>
+                <motion.p
+                  initial={{ x: -20, opacity: 0 }}
+                  animate={{ x: 0, opacity: 1 }}
+                  transition={{ delay: 0.25 }}
+                  className={`text-base font-black ${
+                    randomTowerNotif.isLegendary ? 'text-white text-glow-gold' : 'text-white text-glow'
+                  }`}
+                >
                   {randomTowerNotif.name}
-                </p>
+                </motion.p>
               </div>
             </div>
           </motion.div>
@@ -737,40 +875,79 @@ function PlayPageContent() {
 
       {/* Stage Clear Modal */}
       <Modal isOpen={showStageClear} closeOnBackdrop={false} closeOnEscape={false}>
-        <div className="bg-slate-800 rounded-3xl p-6 w-80 text-center border border-slate-700">
-          <motion.div
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            transition={{ type: 'spring', stiffness: 300 }}
-            className="text-5xl mb-4"
-          >
-            {String.fromCodePoint(0x1F389)}
-          </motion.div>
-          <h2 className="text-2xl font-black text-white mb-2">스테이지 클리어!</h2>
-          <p className="text-slate-400 text-sm mb-4">
-            월드 {worldId} - 스테이지 {stageId}
-          </p>
+        <div className="glass-dark rounded-3xl p-6 w-80 text-center relative overflow-hidden"
+          style={{
+            border: '1.5px solid rgba(245,158,11,0.2)',
+            boxShadow: '0 0 40px rgba(245,158,11,0.08), 0 8px 32px rgba(0,0,0,0.4)',
+          }}
+        >
+          {/* Background radial glow */}
+          <div className="absolute inset-0 pointer-events-none" style={{
+            background: 'radial-gradient(ellipse at 50% 20%, rgba(245,158,11,0.08) 0%, transparent 60%)',
+          }} />
 
-          <div className="space-y-2 mb-6 text-sm">
-            <div className="flex justify-between text-slate-400 bg-slate-900/50 rounded-xl px-4 py-2">
-              <span>점수</span>
-              <span className="text-white font-bold">{score.toLocaleString()}</span>
-            </div>
-            <div className="flex justify-between text-slate-400 bg-slate-900/50 rounded-xl px-4 py-2">
-              <span>웨이브</span>
-              <span className="text-white font-bold">{wave}/{totalWaves}</span>
-            </div>
-            <div className="flex justify-between text-slate-400 bg-slate-900/50 rounded-xl px-4 py-2">
-              <span>남은 HP</span>
-              <span className="text-emerald-400 font-bold">{hp}/{maxHp}</span>
-            </div>
-            <div className="flex justify-between text-slate-400 bg-slate-900/50 rounded-xl px-4 py-2">
-              <span>타워 수</span>
-              <span className="text-white font-bold">{towers.length}</span>
-            </div>
+          {/* Star rating row */}
+          <div className="relative z-10 flex items-center justify-center gap-2 mb-3">
+            {[0, 1, 2].map((i) => {
+              const starCount = hp >= maxHp * 0.8 ? 3 : hp >= maxHp * 0.4 ? 2 : 1;
+              const isFilled = i < starCount;
+              return (
+                <motion.div
+                  key={i}
+                  initial={{ scale: 0, rotate: -180 }}
+                  animate={{ scale: 1, rotate: 0 }}
+                  transition={{ type: 'spring', stiffness: 300, delay: 0.2 + i * 0.15 }}
+                  className={`text-3xl ${isFilled ? 'animate-star-sparkle' : 'opacity-20'}`}
+                >
+                  {String.fromCodePoint(0x2B50)}
+                </motion.div>
+              );
+            })}
           </div>
 
-          <div className="flex gap-3">
+          <motion.h2
+            initial={{ y: 10, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ delay: 0.3 }}
+            className="relative z-10 text-2xl font-black mb-1"
+            style={{
+              background: 'linear-gradient(135deg, #fbbf24, #f59e0b, #d97706)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              filter: 'drop-shadow(0 0 8px rgba(245,158,11,0.3))',
+            }}
+          >
+            STAGE CLEAR!
+          </motion.h2>
+          <p className="relative z-10 text-slate-400 text-xs mb-4 tracking-wide">
+            W{worldId}-{stageId}
+          </p>
+
+          <div className="relative z-10 space-y-1.5 mb-5 text-sm">
+            {[
+              { label: '점수', value: score.toLocaleString(), color: 'text-white' },
+              { label: '웨이브', value: `${wave}/${totalWaves}`, color: 'text-white' },
+              { label: '남은 HP', value: `${hp}/${maxHp}`, color: 'text-emerald-400' },
+              { label: '타워 수', value: `${towers.length}`, color: 'text-white' },
+            ].map((stat, i) => (
+              <motion.div
+                key={stat.label}
+                initial={{ x: -20, opacity: 0 }}
+                animate={{ x: 0, opacity: 1 }}
+                transition={{ delay: 0.4 + i * 0.08 }}
+                className="stat-row-premium flex justify-between text-slate-400 rounded-xl px-4 py-2"
+                style={{
+                  background: 'rgba(15,23,42,0.4)',
+                  border: '1px solid rgba(71,85,105,0.1)',
+                }}
+              >
+                <span>{stat.label}</span>
+                <span className={`${stat.color} font-bold`}>{stat.value}</span>
+              </motion.div>
+            ))}
+          </div>
+
+          <div className="relative z-10 flex gap-3">
             <a href="/adventure" className="flex-1">
               <Button variant="ghost" fullWidth>
                 나가기
@@ -813,13 +990,18 @@ function PlayPageContent() {
         <motion.div
           initial={{ scale: 0.8, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
-          className="bg-slate-800 rounded-3xl p-6 w-80 text-center border border-red-500/30 relative overflow-hidden"
+          className="glass-dark rounded-3xl p-6 w-80 text-center relative overflow-hidden"
+          style={{
+            border: '1.5px solid rgba(239,68,68,0.2)',
+            boxShadow: '0 0 40px rgba(239,68,68,0.06), 0 8px 32px rgba(0,0,0,0.5)',
+          }}
         >
           {/* Animated background pulse */}
           <motion.div
-            animate={{ opacity: [0.05, 0.15, 0.05] }}
+            animate={{ opacity: [0.03, 0.12, 0.03] }}
             transition={{ repeat: Infinity, duration: 2 }}
-            className="absolute inset-0 bg-gradient-to-b from-red-500/10 to-transparent"
+            className="absolute inset-0 pointer-events-none"
+            style={{ background: 'radial-gradient(ellipse at 50% 30%, rgba(239,68,68,0.15) 0%, transparent 70%)' }}
           />
 
           <div className="relative z-10">
@@ -827,22 +1009,36 @@ function PlayPageContent() {
               animate={{ scale: [1, 1.1, 1] }}
               transition={{ repeat: Infinity, duration: 1.5 }}
               className="text-5xl mb-3"
+              style={{ filter: 'drop-shadow(0 0 10px rgba(16,185,129,0.3))' }}
             >
               {String.fromCodePoint(0x1F4D6)}
             </motion.div>
 
-            <h2 className="text-xl font-black text-white mb-2">부활 기회!</h2>
+            <h2 className="text-xl font-black mb-2"
+              style={{
+                background: 'linear-gradient(135deg, #fca5a5, #f87171, #ef4444)',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+              }}
+            >
+              REVIVE CHANCE!
+            </h2>
             <p className="text-sm text-slate-400 mb-1">
               영단어 퀴즈를 맞히면 HP 50%로 부활합니다
             </p>
-            <p className="text-xs text-red-400/60 mb-4">
+            <p className="text-xs text-red-400/50 mb-4 tracking-wide">
               (게임당 1회 사용 가능)
             </p>
 
             {/* Reward Preview */}
-            <div className="bg-slate-900/60 rounded-xl p-3 mb-4 space-y-1.5">
+            <div className="rounded-xl p-3 mb-4 space-y-1.5"
+              style={{
+                background: 'rgba(15,23,42,0.4)',
+                border: '1px solid rgba(16,185,129,0.15)',
+              }}
+            >
               <div className="flex items-center justify-center gap-2">
-                <Heart className="w-4 h-4 text-red-400" fill="currentColor" />
+                <Heart className="w-4 h-4 text-red-400 animate-heartbeat" fill="currentColor" style={{ filter: 'drop-shadow(0 0 4px rgba(239,68,68,0.4))' }} />
                 <span className="text-sm font-bold text-emerald-300">
                   HP {Math.ceil(maxHp * 0.5)} 회복
                 </span>
@@ -856,16 +1052,23 @@ function PlayPageContent() {
               <motion.button
                 whileTap={{ scale: 0.95 }}
                 onClick={handleReviveSkip}
-                className="flex-1 py-3 rounded-xl bg-slate-700 text-slate-400 text-sm font-medium"
+                className="flex-1 py-3 rounded-xl text-slate-400 text-sm font-medium ctrl-btn-glass"
               >
                 포기하기
               </motion.button>
               <motion.button
                 whileTap={{ scale: 0.95 }}
+                whileHover={{ scale: 1.02 }}
                 onClick={handleReviveQuiz}
-                className="flex-1 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-500 text-white text-sm font-bold shadow-lg shadow-emerald-500/30"
+                className="relative flex-1 py-3 rounded-xl text-white text-sm font-bold overflow-hidden"
+                style={{
+                  background: 'linear-gradient(135deg, rgba(16,185,129,0.85), rgba(6,182,212,0.85))',
+                  border: '1px solid rgba(52,211,153,0.3)',
+                  boxShadow: '0 0 16px rgba(16,185,129,0.2)',
+                }}
               >
                 퀴즈 도전!
+                <div className="absolute inset-0 btn-shine-overlay opacity-50 pointer-events-none" />
               </motion.button>
             </div>
           </div>
@@ -876,28 +1079,40 @@ function PlayPageContent() {
       <AnimatePresence>
         {showWaveBonus && !isPaused && !showQuiz && (
           <motion.div
-            initial={{ y: -60, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: -60, opacity: 0 }}
+            initial={{ y: -60, opacity: 0, scale: 0.9 }}
+            animate={{ y: 0, opacity: 1, scale: 1 }}
+            exit={{ y: -60, opacity: 0, scale: 0.9 }}
+            transition={{ type: 'spring', stiffness: 300, damping: 25 }}
             className="absolute top-16 left-1/2 -translate-x-1/2 z-30"
           >
             <motion.button
               whileTap={{ scale: 0.95 }}
+              whileHover={{ scale: 1.03 }}
               onClick={handleWaveBonusQuiz}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-gradient-to-r from-amber-600/90 to-orange-600/90 backdrop-blur-sm border border-amber-400/30 shadow-lg shadow-amber-500/20"
+              className="relative flex items-center gap-3 px-5 py-3 rounded-2xl glass-shimmer overflow-hidden"
+              style={{
+                background: 'linear-gradient(135deg, rgba(180,83,9,0.8), rgba(194,65,12,0.75))',
+                border: '1.5px solid rgba(253,224,71,0.25)',
+                boxShadow: '0 0 20px rgba(245,158,11,0.15), 0 8px 24px rgba(0,0,0,0.3)',
+              }}
             >
-              <span className="text-lg">{String.fromCodePoint(0x1F4D6)}</span>
+              <span className="text-lg" style={{ filter: 'drop-shadow(0 0 4px rgba(253,224,71,0.4))' }}>{String.fromCodePoint(0x1F4D6)}</span>
               <div className="text-left">
-                <p className="text-xs font-bold text-white">퀴즈 풀고 골드 2배!</p>
-                <p className="text-[10px] text-amber-200">+{waveBonusGold}G 보너스</p>
+                <p className="text-xs font-bold text-white tracking-wide">퀴즈 풀고 골드 2배!</p>
+                <p className="text-[10px] text-amber-200/80 font-medium">+{waveBonusGold}G 보너스</p>
               </div>
               <motion.div
-                animate={{ scale: [1, 1.2, 1] }}
-                transition={{ repeat: Infinity, duration: 1 }}
-                className="text-amber-300 text-xs font-bold"
+                animate={{ scale: [1, 1.25, 1] }}
+                transition={{ repeat: Infinity, duration: 0.8 }}
+                className="text-xs font-black px-2 py-0.5 rounded-full text-glow-gold"
+                style={{
+                  background: 'rgba(253,224,71,0.15)',
+                  color: '#fde047',
+                }}
               >
                 GO
               </motion.div>
+              <div className="absolute inset-0 btn-shine-overlay opacity-40 pointer-events-none" />
             </motion.button>
           </motion.div>
         )}
@@ -911,23 +1126,29 @@ function PlayPageContent() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="absolute inset-0 z-25 flex items-center justify-center pointer-events-none"
+            style={{ background: 'radial-gradient(ellipse at center, rgba(239,68,68,0.05) 0%, transparent 70%)' }}
           >
             <motion.div
-              initial={{ scale: 2, opacity: 0 }}
+              initial={{ scale: 2.5, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.5, opacity: 0 }}
               transition={{ type: 'spring', stiffness: 200 }}
               className="text-center"
             >
               <motion.p
-                animate={{ scale: [1, 1.05, 1] }}
-                transition={{ repeat: Infinity, duration: 0.8 }}
-                className="text-3xl font-black text-red-500 drop-shadow-lg"
-                style={{ textShadow: '0 0 20px rgba(255,0,0,0.5)' }}
+                animate={{ scale: [1, 1.06, 1] }}
+                transition={{ repeat: Infinity, duration: 0.7 }}
+                className="text-4xl font-black tracking-wider text-glow-danger"
+                style={{
+                  background: 'linear-gradient(135deg, #fca5a5, #ef4444, #dc2626)',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                  filter: 'drop-shadow(0 0 20px rgba(239,68,68,0.4))',
+                }}
               >
                 BOSS INCOMING!
               </motion.p>
-              <p className="text-sm text-red-300 mt-1">{bossWarningType}</p>
+              <p className="text-sm text-red-300/70 mt-1.5 tracking-wide">{bossWarningType}</p>
             </motion.div>
           </motion.div>
         )}
@@ -935,36 +1156,68 @@ function PlayPageContent() {
 
       {/* Game Over Modal */}
       <Modal isOpen={showGameOver} closeOnBackdrop={false} closeOnEscape={false}>
-        <div className="bg-slate-800 rounded-3xl p-6 w-80 text-center border border-slate-700">
+        <div className="glass-dark rounded-3xl p-6 w-80 text-center relative overflow-hidden"
+          style={{
+            border: '1.5px solid rgba(239,68,68,0.15)',
+            boxShadow: '0 0 40px rgba(239,68,68,0.06), 0 8px 32px rgba(0,0,0,0.5)',
+          }}
+        >
+          {/* Background dark red vignette */}
+          <div className="absolute inset-0 pointer-events-none" style={{
+            background: 'radial-gradient(ellipse at 50% 20%, rgba(239,68,68,0.06) 0%, transparent 60%)',
+          }} />
+
           <motion.div
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ type: 'spring', stiffness: 300 }}
-            className="text-5xl mb-4"
+            className="relative z-10 text-5xl mb-3"
+            style={{ filter: 'drop-shadow(0 0 12px rgba(239,68,68,0.3))' }}
           >
             {String.fromCodePoint(0x1F480)}
           </motion.div>
-          <h2 className="text-2xl font-black text-white mb-2">게임 오버</h2>
-          <p className="text-slate-400 text-sm mb-4">
-            월드 {worldId} - 스테이지 {stageId}
+
+          <motion.h2
+            initial={{ y: 10, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ delay: 0.15 }}
+            className="relative z-10 text-2xl font-black mb-1 text-glow-danger"
+            style={{
+              background: 'linear-gradient(135deg, #fca5a5, #ef4444, #dc2626)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+            }}
+          >
+            GAME OVER
+          </motion.h2>
+          <p className="relative z-10 text-slate-500 text-xs mb-4 tracking-wide">
+            W{worldId}-{stageId}
           </p>
 
-          <div className="space-y-2 mb-6 text-sm">
-            <div className="flex justify-between text-slate-400 bg-slate-900/50 rounded-xl px-4 py-2">
-              <span>점수</span>
-              <span className="text-white font-bold">{score.toLocaleString()}</span>
-            </div>
-            <div className="flex justify-between text-slate-400 bg-slate-900/50 rounded-xl px-4 py-2">
-              <span>웨이브</span>
-              <span className="text-white font-bold">{wave}/{totalWaves}</span>
-            </div>
-            <div className="flex justify-between text-slate-400 bg-slate-900/50 rounded-xl px-4 py-2">
-              <span>타워 수</span>
-              <span className="text-white font-bold">{towers.length}</span>
-            </div>
+          <div className="relative z-10 space-y-1.5 mb-5 text-sm">
+            {[
+              { label: '점수', value: score.toLocaleString() },
+              { label: '웨이브', value: `${wave}/${totalWaves}` },
+              { label: '타워 수', value: `${towers.length}` },
+            ].map((stat, i) => (
+              <motion.div
+                key={stat.label}
+                initial={{ x: -20, opacity: 0 }}
+                animate={{ x: 0, opacity: 1 }}
+                transition={{ delay: 0.25 + i * 0.08 }}
+                className="stat-row-premium flex justify-between text-slate-400 rounded-xl px-4 py-2"
+                style={{
+                  background: 'rgba(15,23,42,0.4)',
+                  border: '1px solid rgba(71,85,105,0.1)',
+                }}
+              >
+                <span>{stat.label}</span>
+                <span className="text-white font-bold">{stat.value}</span>
+              </motion.div>
+            ))}
           </div>
 
-          <div className="flex gap-3">
+          <div className="relative z-10 flex gap-3">
             <a href="/adventure" className="flex-1">
               <Button variant="ghost" fullWidth>
                 나가기

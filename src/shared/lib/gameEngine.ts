@@ -658,8 +658,8 @@ export class GameEngine {
     if (!this.mapData) return;
 
     const template = ENEMY_TEMPLATES[type];
-    const waveScaling = 1 + this.currentWaveIndex * 0.12;
-    const bossMultiplier = isBoss ? 1 : 1; // boss stats are already high in template
+    const waveScaling = 1 + this.currentWaveIndex * 0.18;
+    const bossMultiplier = isBoss ? 1.5 : 1;
 
     const scaledHp = Math.round(template.hp * waveScaling * bossMultiplier);
     const startPos = getPositionOnPath(this.mapData.path, 0, this.cellSize);

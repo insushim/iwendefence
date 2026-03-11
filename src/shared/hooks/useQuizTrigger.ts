@@ -54,7 +54,7 @@ interface QuizTriggerReturn {
 // ============================================================
 
 /** Minimum seconds between any two quiz triggers (anti-spam) */
-const GLOBAL_COOLDOWN_MS = 8_000;
+const GLOBAL_COOLDOWN_MS = 15_000;
 
 /** Wave bonus quiz chance (40%) */
 const WAVE_BONUS_CHANCE = 0.4;
@@ -266,8 +266,8 @@ export function useQuizTrigger({ showQuiz, setShowQuiz, isTerminal }: QuizTrigge
     const quiz = generateQuiz(pickQuizType(1));
     if (!quiz) return;
 
-    // Bonus gold = base wave reward doubled
-    const bonusGold = 30 + currentWave * 10;
+    // Bonus gold = modest wave reward
+    const bonusGold = 10 + currentWave * 3;
 
     // Override reward for wave bonus
     quiz.reward = {

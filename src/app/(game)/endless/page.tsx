@@ -8,7 +8,7 @@ import {
   FastForward,
   BookOpen,
   ArrowLeft,
-  Infinity,
+  Infinity as InfinityIcon,
   Trophy,
   Swords,
 } from 'lucide-react';
@@ -29,7 +29,7 @@ const LEGENDARY_TYPES = new Set([TowerType.METEOR, TowerType.VOID, TowerType.PHO
 const BASIC_TYPES = [TowerType.ARCHER, TowerType.ICE, TowerType.POISON, TowerType.BARRICADE];
 const ADVANCED_TYPES = [TowerType.MAGIC, TowerType.CANNON, TowerType.LIGHTNING, TowerType.SNIPER, TowerType.FLAME, TowerType.HEALER, TowerType.GOLDMINE, TowerType.WORD];
 const LEGENDARY_LIST = [TowerType.METEOR, TowerType.VOID, TowerType.PHOENIX, TowerType.CHRONO, TowerType.DIVINE];
-const RANDOM_TOWER_COST = 80;
+const RANDOM_TOWER_COST = 150;
 
 function rollRandomTower(): TowerType {
   const roll = Math.random();
@@ -465,62 +465,110 @@ export default function EndlessPage() {
         combo={combo}
       />
 
-      {/* Endless Mode Banner */}
-      <div className="relative z-10 flex items-center justify-center gap-3 py-1 bg-gradient-to-r from-red-600/20 via-orange-600/20 to-red-600/20 border-b border-red-500/20">
-        <Infinity className="w-4 h-4 text-red-400" />
-        <span className="text-xs font-bold text-red-300">무한 모드</span>
-        <div className="flex items-center gap-1 text-xs text-amber-400">
-          <Trophy className="w-3 h-3" />
-          <span className="font-bold tabular-nums">{endlessHighScore.toLocaleString()}</span>
-        </div>
-        {/* Quiz combo indicator */}
-        {quizCombo > 0 && (
-          <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-orange-500/20 border border-orange-500/30">
-            <span className="text-[10px] font-bold text-orange-300">{quizCombo} COMBO</span>
+      {/* Endless Mode Banner - Glassmorphism with animated infinity */}
+      <div className="relative z-10 glass-dark glass-shimmer">
+        <div className="flex items-center justify-center gap-3 py-1.5 relative">
+          {/* Animated gradient underline */}
+          <div className="absolute bottom-0 left-0 right-0 h-px animate-border-glow opacity-40" />
+
+          <motion.div
+            animate={{ rotate: [0, 360] }}
+            transition={{ repeat: Infinity, duration: 8, ease: 'linear' }}
+          >
+            <InfinityIcon className="w-4 h-4 text-red-400 drop-shadow-[0_0_6px_rgba(248,113,113,0.6)]" />
+          </motion.div>
+          <span className="text-xs font-black text-red-300 text-glow-danger tracking-wider uppercase">무한 모드</span>
+
+          {/* Wave counter badge */}
+          <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full glass border border-red-500/20">
+            <Swords className="w-3 h-3 text-red-400" />
+            <span className="text-[10px] font-bold text-red-300 tabular-nums">WAVE {wave}</span>
           </div>
-        )}
+
+          {/* High score */}
+          <div className="flex items-center gap-1 px-2 py-0.5 rounded-full glass border border-amber-500/20">
+            <Trophy className="w-3 h-3 text-amber-400" />
+            <span className="text-[10px] font-bold text-amber-400 tabular-nums text-glow-gold">{endlessHighScore.toLocaleString()}</span>
+          </div>
+
+          {/* Quiz combo indicator */}
+          {quizCombo > 0 && (
+            <motion.div
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-orange-500/20 border border-orange-400/40 shadow-[0_0_12px_rgba(251,146,60,0.3)]"
+            >
+              <span className="text-[10px] font-black text-orange-300 tracking-wide">{quizCombo} COMBO</span>
+            </motion.div>
+          )}
+        </div>
       </div>
 
-      {/* Game Canvas Area */}
+      {/* Game Canvas Area - with vignette/border glow */}
       <div ref={containerRef} className="flex-1 relative flex items-center justify-center bg-[#1a2435]">
+        {/* Vignette overlay */}
+        <div className="absolute inset-0 pointer-events-none z-[1]" style={{
+          boxShadow: 'inset 0 0 60px rgba(0,0,0,0.5), inset 0 0 120px rgba(0,0,0,0.3)',
+        }} />
+        {/* Subtle top/bottom border glow */}
+        <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-red-500/30 to-transparent pointer-events-none z-[1]" />
+        <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-orange-500/30 to-transparent pointer-events-none z-[1]" />
+
         <canvas
           ref={canvasRef}
-          className="block cursor-pointer touch-none"
+          className="block cursor-pointer touch-none relative z-0"
           onClick={handleCanvasTap}
           style={{ imageRendering: 'pixelated' }}
         />
 
-        {/* Wave start button overlay */}
+        {/* Wave start button overlay - Pulsing glow, glass effect */}
         {!isGameOver && (
           <div className="absolute bottom-3 right-3 z-10">
             <motion.button
               whileTap={{ scale: 0.9 }}
+              whileHover={{ scale: 1.05 }}
               onClick={handleStartWave}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-gradient-to-r from-orange-500 to-red-500 text-white text-xs font-bold shadow-lg shadow-orange-500/30"
+              className="relative flex items-center gap-1.5 px-4 py-2.5 rounded-xl glass text-white text-xs font-black shadow-[0_0_20px_rgba(249,115,22,0.4),0_0_40px_rgba(249,115,22,0.15)] border-orange-500/40 overflow-hidden btn-glow"
+              style={{
+                background: 'linear-gradient(135deg, rgba(249,115,22,0.7), rgba(239,68,68,0.7))',
+                borderColor: 'rgba(249,115,22,0.4)',
+              }}
             >
-              <Swords className="w-3.5 h-3.5" />
-              <span>다음 웨이브</span>
+              {/* Pulsing glow ring */}
+              <motion.div
+                animate={{ opacity: [0.4, 0.8, 0.4], scale: [1, 1.15, 1] }}
+                transition={{ repeat: Infinity, duration: 2, ease: 'easeInOut' }}
+                className="absolute inset-0 rounded-xl"
+                style={{ boxShadow: '0 0 20px rgba(249,115,22,0.5), inset 0 0 10px rgba(255,255,255,0.1)' }}
+              />
+              <Swords className="w-3.5 h-3.5 relative z-10 drop-shadow-[0_0_4px_rgba(255,255,255,0.5)]" />
+              <span className="relative z-10 tracking-wide">다음 웨이브</span>
             </motion.button>
           </div>
         )}
       </div>
 
-      {/* Control Bar */}
-      <div className="bg-slate-900/90 backdrop-blur-xl border-t border-slate-700/50 safe-area-pb">
-        <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-800/50">
+      {/* Control Bar - Glassmorphism */}
+      <div className="glass-dark border-t border-slate-600/30 safe-area-pb">
+        <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-700/30">
           <a href="/">
-            <div className="w-9 h-9 rounded-xl bg-slate-800 flex items-center justify-center active:bg-slate-700">
+            <motion.div
+              whileTap={{ scale: 0.9 }}
+              className="w-9 h-9 rounded-xl glass flex items-center justify-center active:bg-slate-700/50 btn-glow border-slate-600/30"
+            >
               <ArrowLeft className="w-4 h-4 text-slate-400" />
-            </div>
+            </motion.div>
           </a>
 
           <motion.button
             whileTap={{ scale: 0.9 }}
             onClick={togglePause}
-            className="w-9 h-9 rounded-xl bg-slate-800 flex items-center justify-center active:bg-slate-700"
+            className={`w-9 h-9 rounded-xl glass flex items-center justify-center active:bg-slate-700/50 btn-glow transition-all ${
+              isPaused ? 'border-emerald-500/30 shadow-[0_0_12px_rgba(16,185,129,0.2)]' : 'border-slate-600/30'
+            }`}
           >
             {isPaused ? (
-              <Play className="w-4 h-4 text-emerald-400" />
+              <Play className="w-4 h-4 text-emerald-400 drop-shadow-[0_0_4px_rgba(16,185,129,0.6)]" />
             ) : (
               <Pause className="w-4 h-4 text-slate-400" />
             )}
@@ -529,10 +577,10 @@ export default function EndlessPage() {
           <motion.button
             whileTap={{ scale: 0.9 }}
             onClick={handleSpeedToggle}
-            className="h-9 px-3 rounded-xl bg-slate-800 flex items-center gap-1.5 text-sm active:bg-slate-700"
+            className="h-9 px-3 rounded-xl glass flex items-center gap-1.5 text-sm active:bg-slate-700/50 btn-glow border-amber-500/20 shadow-[0_0_8px_rgba(245,158,11,0.1)]"
           >
-            <FastForward className="w-4 h-4 text-amber-400" />
-            <span className="text-amber-400 font-bold tabular-nums">x{speed}</span>
+            <FastForward className="w-4 h-4 text-amber-400 drop-shadow-[0_0_4px_rgba(245,158,11,0.5)]" />
+            <span className="text-amber-400 font-black tabular-nums text-glow-gold">x{speed}</span>
           </motion.button>
 
           <div className="flex-1" />
@@ -540,39 +588,59 @@ export default function EndlessPage() {
           <motion.button
             whileTap={{ scale: 0.9 }}
             onClick={handleManualQuiz}
-            className="h-9 px-3 rounded-xl bg-indigo-600 flex items-center gap-1.5 text-sm text-white font-medium active:bg-indigo-500"
+            className="h-9 px-4 rounded-xl flex items-center gap-1.5 text-sm text-white font-bold active:opacity-80 btn-glow overflow-hidden relative"
+            style={{
+              background: 'linear-gradient(135deg, rgba(99,102,241,0.8), rgba(139,92,246,0.8))',
+              boxShadow: '0 0 16px rgba(99,102,241,0.3), inset 0 1px 0 rgba(255,255,255,0.1)',
+              border: '1px solid rgba(99,102,241,0.4)',
+            }}
           >
-            <BookOpen className="w-4 h-4" />
-            <span>퀴즈</span>
+            <BookOpen className="w-4 h-4 drop-shadow-[0_0_4px_rgba(255,255,255,0.4)]" />
+            <span className="text-glow tracking-wide">퀴즈</span>
           </motion.button>
         </div>
 
-        {/* Tower Selection Bar */}
+        {/* Tower Selection Bar - Glass cards */}
         <div className="overflow-x-auto scrollbar-hide">
           <div className="flex gap-2 px-3 py-2 min-w-max">
-            {/* Random Tower Button */}
+            {/* Random Tower Button - Rainbow border */}
             <motion.button
               whileTap={{ scale: 0.95 }}
               onClick={handleRandomTowerSelect}
               className={`
-                flex flex-col items-center gap-0.5 p-2 rounded-xl min-w-[60px]
-                transition-all select-none relative
+                flex flex-col items-center gap-0.5 p-2 rounded-xl min-w-[64px]
+                transition-all select-none relative overflow-hidden
                 ${
                   isRandomTower
-                    ? 'bg-gradient-to-b from-purple-600/40 to-amber-600/40 border-2 border-amber-400 shadow-lg shadow-amber-500/20'
+                    ? 'border-2 border-amber-400 shadow-[0_0_20px_rgba(245,158,11,0.4),0_0_40px_rgba(168,85,247,0.2)]'
                     : gold >= RANDOM_TOWER_COST
-                      ? 'bg-gradient-to-b from-purple-900/60 to-amber-900/60 border-2 border-purple-500/50 hover:border-amber-400 active:bg-slate-700'
-                      : 'bg-slate-800/40 border-2 border-transparent opacity-40'
+                      ? 'border-2 border-purple-500/40 hover:border-amber-400/60'
+                      : 'border-2 border-transparent opacity-40'
                 }
               `}
+              style={{
+                background: isRandomTower
+                  ? 'linear-gradient(135deg, rgba(168,85,247,0.4), rgba(245,158,11,0.4))'
+                  : gold >= RANDOM_TOWER_COST
+                    ? 'linear-gradient(135deg, rgba(88,28,135,0.5), rgba(120,53,15,0.5))'
+                    : 'rgba(30,41,59,0.4)',
+              }}
             >
-              <span className="text-xl leading-none">?</span>
-              <span className="text-[10px] text-amber-300 font-bold truncate w-full text-center">
+              {/* Rainbow animated border for random tower */}
+              {gold >= RANDOM_TOWER_COST && (
+                <div className="absolute inset-0 rounded-xl animate-border-glow opacity-20" style={{ padding: '1px' }} />
+              )}
+              <motion.span
+                animate={isRandomTower ? { rotate: [0, 10, -10, 0], scale: [1, 1.1, 1] } : {}}
+                transition={{ repeat: Infinity, duration: 1.5 }}
+                className="text-xl leading-none relative z-10 drop-shadow-[0_0_8px_rgba(168,85,247,0.5)]"
+              >?</motion.span>
+              <span className="text-[10px] text-amber-300 font-bold truncate w-full text-center relative z-10">
                 Random
               </span>
               <span
-                className={`text-[10px] font-bold tabular-nums ${
-                  gold >= RANDOM_TOWER_COST ? 'text-amber-400' : 'text-slate-600'
+                className={`text-[10px] font-bold tabular-nums relative z-10 ${
+                  gold >= RANDOM_TOWER_COST ? 'text-amber-400 text-glow-gold' : 'text-slate-600'
                 }`}
               >
                 {RANDOM_TOWER_COST}G
@@ -580,7 +648,7 @@ export default function EndlessPage() {
             </motion.button>
 
             {/* Separator */}
-            <div className="w-px bg-slate-700/50 self-stretch my-1" />
+            <div className="w-px self-stretch my-1 bg-gradient-to-b from-transparent via-slate-600/50 to-transparent" />
 
             {towerList.map((tower) => {
               const isSelected = selectedTower === tower.type && !isRandomTower;
@@ -592,23 +660,37 @@ export default function EndlessPage() {
                   whileTap={{ scale: 0.95 }}
                   onClick={() => handleTowerSelect(tower.type)}
                   className={`
-                    flex flex-col items-center gap-0.5 p-2 rounded-xl min-w-[60px]
-                    transition-all select-none
+                    flex flex-col items-center gap-0.5 p-2 rounded-xl min-w-[64px]
+                    transition-all select-none relative overflow-hidden
                     ${
                       isSelected
-                        ? 'bg-red-600/30 border-2 border-red-500 shadow-lg shadow-red-500/20'
+                        ? 'border-2 border-red-500 shadow-[0_0_16px_rgba(239,68,68,0.4),0_0_32px_rgba(239,68,68,0.15)]'
                         : canAfford
-                          ? 'bg-slate-800/80 border-2 border-transparent hover:border-slate-600 active:bg-slate-700'
-                          : 'bg-slate-800/40 border-2 border-transparent opacity-40'
+                          ? 'glass border-slate-600/20 hover:border-slate-500/40 active:bg-slate-700/50'
+                          : 'border-2 border-transparent opacity-40'
                     }
                   `}
+                  style={isSelected ? {
+                    background: 'linear-gradient(135deg, rgba(239,68,68,0.25), rgba(249,115,22,0.2))',
+                  } : !canAfford ? {
+                    background: 'rgba(30,41,59,0.4)',
+                  } : undefined}
                 >
-                  <span className="text-xl leading-none">{tower.icon}</span>
-                  <span className="text-[10px] text-slate-400 font-medium truncate w-full text-center">
+                  {/* Selection glow ring */}
+                  {isSelected && (
+                    <motion.div
+                      animate={{ opacity: [0.3, 0.6, 0.3] }}
+                      transition={{ repeat: Infinity, duration: 1.5 }}
+                      className="absolute inset-0 rounded-xl"
+                      style={{ boxShadow: 'inset 0 0 12px rgba(239,68,68,0.3)' }}
+                    />
+                  )}
+                  <span className={`text-xl leading-none relative z-10 ${isSelected ? 'drop-shadow-[0_0_6px_rgba(239,68,68,0.5)]' : ''}`}>{tower.icon}</span>
+                  <span className={`text-[10px] font-medium truncate w-full text-center relative z-10 ${isSelected ? 'text-red-300' : 'text-slate-400'}`}>
                     {tower.nameKr}
                   </span>
                   <span
-                    className={`text-[10px] font-bold tabular-nums ${
+                    className={`text-[10px] font-bold tabular-nums relative z-10 ${
                       canAfford ? 'text-amber-400' : 'text-slate-600'
                     }`}
                   >
@@ -621,28 +703,56 @@ export default function EndlessPage() {
         </div>
       </div>
 
-      {/* Random Tower Notification */}
+      {/* Random Tower Notification - Dramatic entrance */}
       <AnimatePresence>
         {randomTowerNotif && (
           <motion.div
-            initial={{ y: 60, opacity: 0, scale: 0.8 }}
+            initial={{ y: 80, opacity: 0, scale: 0.5 }}
             animate={{ y: 0, opacity: 1, scale: 1 }}
-            exit={{ y: -30, opacity: 0, scale: 0.9 }}
+            exit={{ y: -40, opacity: 0, scale: 0.8 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 20 }}
             className="absolute bottom-40 left-1/2 -translate-x-1/2 z-40 pointer-events-none"
           >
+            {/* Golden burst for legendary */}
+            {randomTowerNotif.isLegendary && (
+              <motion.div
+                initial={{ scale: 0, opacity: 1 }}
+                animate={{ scale: 3, opacity: 0 }}
+                transition={{ duration: 1, ease: 'easeOut' }}
+                className="absolute inset-0 rounded-full pointer-events-none"
+                style={{
+                  background: 'radial-gradient(circle, rgba(245,158,11,0.6) 0%, rgba(245,158,11,0) 70%)',
+                }}
+              />
+            )}
             <div className={`
-              flex items-center gap-2 px-5 py-3 rounded-2xl shadow-xl
+              flex items-center gap-3 px-6 py-4 rounded-2xl relative overflow-hidden
               ${randomTowerNotif.isLegendary
-                ? 'bg-gradient-to-r from-amber-600 to-yellow-500 border border-yellow-300/50'
-                : 'bg-gradient-to-r from-slate-700 to-slate-600 border border-slate-500/50'
+                ? 'glass border-2 border-yellow-400/60 shadow-[0_0_30px_rgba(245,158,11,0.5),0_0_60px_rgba(245,158,11,0.2)]'
+                : 'glass border border-slate-400/30 shadow-[0_0_20px_rgba(148,163,184,0.2)]'
               }
-            `}>
-              <span className="text-2xl">{randomTowerNotif.icon}</span>
-              <div className="text-center">
-                <p className={`text-xs font-bold ${randomTowerNotif.isLegendary ? 'text-yellow-100' : 'text-slate-300'}`}>
+            `}
+            style={randomTowerNotif.isLegendary ? {
+              background: 'linear-gradient(135deg, rgba(245,158,11,0.4), rgba(234,179,8,0.3), rgba(245,158,11,0.4))',
+            } : undefined}
+            >
+              {/* Shimmer effect */}
+              <motion.div
+                animate={{ x: ['-100%', '200%'] }}
+                transition={{ repeat: Infinity, duration: 2, ease: 'linear' }}
+                className="absolute top-0 left-0 w-1/3 h-full pointer-events-none"
+                style={{ background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent)' }}
+              />
+              <motion.span
+                animate={{ scale: [1, 1.2, 1] }}
+                transition={{ repeat: Infinity, duration: 1, ease: 'easeInOut' }}
+                className={`text-3xl ${randomTowerNotif.isLegendary ? 'drop-shadow-[0_0_12px_rgba(245,158,11,0.8)]' : ''}`}
+              >{randomTowerNotif.icon}</motion.span>
+              <div className="text-center relative z-10">
+                <p className={`text-xs font-black tracking-widest ${randomTowerNotif.isLegendary ? 'text-yellow-200 text-glow-gold' : 'text-slate-300'}`}>
                   {randomTowerNotif.isLegendary ? 'LEGENDARY!' : 'Got Tower!'}
                 </p>
-                <p className="text-sm font-black text-white">
+                <p className={`text-base font-black ${randomTowerNotif.isLegendary ? 'text-white text-glow-gold' : 'text-white'}`}>
                   {randomTowerNotif.name}
                 </p>
               </div>
@@ -657,47 +767,90 @@ export default function EndlessPage() {
         onClose={() => setShowQuiz(false)}
       />
 
-      {/* Game Over Modal */}
+      {/* Game Over Modal - Premium glassmorphism */}
       <Modal isOpen={showGameOver} closeOnBackdrop={false} closeOnEscape={false}>
-        <div className="bg-slate-800 rounded-3xl p-6 w-80 text-center border border-slate-700">
+        <div className="glass-dark rounded-3xl p-6 w-80 text-center relative overflow-hidden" style={{
+          boxShadow: '0 0 40px rgba(239,68,68,0.15), 0 25px 50px rgba(0,0,0,0.5)',
+          border: '1px solid rgba(239,68,68,0.2)',
+        }}>
+          {/* Background ambient glow */}
+          <div className="absolute inset-0 pointer-events-none rounded-3xl" style={{
+            background: 'radial-gradient(ellipse at top, rgba(239,68,68,0.08) 0%, transparent 60%)',
+          }} />
+
           <motion.div
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            transition={{ type: 'spring', stiffness: 300 }}
-            className="text-5xl mb-4"
+            initial={{ scale: 0, rotate: -180 }}
+            animate={{ scale: 1, rotate: 0 }}
+            transition={{ type: 'spring', stiffness: 300, damping: 15 }}
+            className="text-5xl mb-4 relative z-10"
           >
             {String.fromCodePoint(0x1F480)}
           </motion.div>
-          <h2 className="text-2xl font-black text-white mb-1">게임 오버</h2>
-          <p className="text-slate-400 text-sm mb-4">무한 모드</p>
+          <h2 className="text-2xl font-black text-white mb-1 relative z-10 text-glow-danger">게임 오버</h2>
+          <p className="text-slate-400 text-sm mb-4 relative z-10 tracking-wide">무한 모드</p>
 
-          <div className="space-y-2 mb-6 text-sm">
-            <div className="flex justify-between text-slate-400 bg-slate-900/50 rounded-xl px-4 py-2">
+          <div className="space-y-2 mb-6 text-sm relative z-10">
+            <motion.div
+              initial={{ x: -20, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              transition={{ delay: 0.1 }}
+              className="flex justify-between text-slate-400 glass rounded-xl px-4 py-2.5 border-slate-600/20"
+            >
               <span>최종 점수</span>
-              <span className="text-white font-bold">{score.toLocaleString()}</span>
-            </div>
-            <div className="flex justify-between text-slate-400 bg-slate-900/50 rounded-xl px-4 py-2">
+              <span className="text-white font-black tabular-nums animate-shimmer"
+                style={{
+                  backgroundImage: 'linear-gradient(90deg, #f1f5f9, #e2e8f0, #f8fafc, #e2e8f0, #f1f5f9)',
+                  backgroundSize: '200% 100%',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                }}
+              >{score.toLocaleString()}</span>
+            </motion.div>
+            <motion.div
+              initial={{ x: -20, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              transition={{ delay: 0.2 }}
+              className="flex justify-between text-slate-400 glass rounded-xl px-4 py-2.5 border-slate-600/20"
+            >
               <span>도달 웨이브</span>
-              <span className="text-white font-bold">{wave}</span>
-            </div>
-            <div className="flex justify-between text-slate-400 bg-slate-900/50 rounded-xl px-4 py-2">
+              <span className="text-white font-black tabular-nums">{wave}</span>
+            </motion.div>
+            <motion.div
+              initial={{ x: -20, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              transition={{ delay: 0.3 }}
+              className="flex justify-between text-slate-400 glass rounded-xl px-4 py-2.5 border-amber-500/20"
+            >
               <span>최고 기록</span>
-              <span className="text-amber-400 font-bold">
+              <span className="text-amber-400 font-black tabular-nums text-glow-gold">
                 {Math.max(score, endlessHighScore).toLocaleString()}
               </span>
-            </div>
+            </motion.div>
             {score > endlessHighScore && (
               <motion.div
-                initial={{ scale: 0.8, opacity: 0 }}
+                initial={{ scale: 0.5, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
-                className="py-2 px-4 rounded-xl bg-amber-500/20 border border-amber-500/30 text-amber-300 font-bold text-sm"
+                transition={{ delay: 0.5, type: 'spring', stiffness: 400 }}
+                className="py-3 px-4 rounded-xl relative overflow-hidden"
+                style={{
+                  background: 'linear-gradient(135deg, rgba(245,158,11,0.25), rgba(234,179,8,0.15))',
+                  border: '1px solid rgba(245,158,11,0.4)',
+                  boxShadow: '0 0 20px rgba(245,158,11,0.2), inset 0 0 20px rgba(245,158,11,0.1)',
+                }}
               >
-                NEW RECORD!
+                {/* Shimmer across NEW RECORD */}
+                <motion.div
+                  animate={{ x: ['-100%', '200%'] }}
+                  transition={{ repeat: Infinity, duration: 2.5, ease: 'linear' }}
+                  className="absolute top-0 left-0 w-1/3 h-full pointer-events-none"
+                  style={{ background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent)' }}
+                />
+                <span className="text-amber-300 font-black text-sm tracking-widest text-glow-gold relative z-10">NEW RECORD!</span>
               </motion.div>
             )}
           </div>
 
-          <div className="flex gap-3">
+          <div className="flex gap-3 relative z-10">
             <a href="/" className="flex-1">
               <Button variant="ghost" fullWidth>
                 나가기

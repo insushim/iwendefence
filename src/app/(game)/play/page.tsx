@@ -18,6 +18,7 @@ import { useGameLoop } from '@/shared/hooks/useGameLoop';
 import { useQuizTrigger } from '@/shared/hooks/useQuizTrigger';
 import { getStage } from '@/shared/constants/stages';
 import { TOWER_DEFINITIONS } from '@/shared/constants/towers';
+import type { PlacementInfo } from '@/shared/lib/renderer';
 import { TowerType, type GameSpeed, type Tower, type WorldId, type StageId } from '@/shared/types/game';
 import GameHUD from '@/widgets/hud/GameHUD';
 import WordQuizModal from '@/widgets/word-modal/WordQuizModal';
@@ -323,6 +324,7 @@ function PlayPageContent() {
         addTower(newTower);
         useGameStore.getState().addGold(-def.cost);
         setSelectedTower(null);
+        gameLoop.placementInfoRef.current = null;
         return;
       }
 
@@ -337,6 +339,79 @@ function PlayPageContent() {
     },
     [selectedTower, gold, towers, addTower, gameLoop]
   );
+
+  // ── Placement preview: update placementInfo on hover ──
+  const updatePlacementInfo = useCallback(
+    (clientX: number, clientY: number) => {
+      const canvas = canvasRef.current;
+      const engine = gameLoop.getEngine();
+      if (!canvas || !engine || !selectedTower) {
+        gameLoop.placementInfoRef.current = null;
+        return;
+      }
+
+      const mapData = engine.getMapData();
+      if (!mapData) return;
+
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+
+      const canvasX = (clientX - rect.left) * scaleX;
+      const canvasY = (clientY - rect.top) * scaleY;
+
+      const cs = engine.getCellSize();
+      const col = Math.floor(canvasX / cs);
+      const row = Math.floor(canvasY / cs);
+
+      if (row < 0 || row >= mapData.grid.length || col < 0 || col >= mapData.grid[0].length) {
+        gameLoop.placementInfoRef.current = null;
+        return;
+      }
+
+      const def = TOWER_DEFINITIONS[selectedTower];
+      const gridValue = mapData.grid[row][col];
+      const existingTower = towers.find(
+        (t) => t.position.row === row && t.position.col === col
+      );
+      const canPlace = gridValue === 2 && !existingTower && gold >= def.cost;
+
+      gameLoop.placementInfoRef.current = {
+        towerType: selectedTower,
+        row,
+        col,
+        range: def.baseStats.range,
+        canPlace,
+      };
+    },
+    [selectedTower, towers, gold, gameLoop]
+  );
+
+  const handleCanvasMouseMove = useCallback(
+    (e: React.MouseEvent<HTMLCanvasElement>) => {
+      updatePlacementInfo(e.clientX, e.clientY);
+    },
+    [updatePlacementInfo]
+  );
+
+  const handleCanvasTouchMove = useCallback(
+    (e: React.TouchEvent<HTMLCanvasElement>) => {
+      if (e.touches.length === 0) return;
+      updatePlacementInfo(e.touches[0].clientX, e.touches[0].clientY);
+    },
+    [updatePlacementInfo]
+  );
+
+  const handleCanvasMouseLeave = useCallback(() => {
+    gameLoop.placementInfoRef.current = null;
+  }, [gameLoop]);
+
+  // Clear placement info when selectedTower changes or is deselected
+  useEffect(() => {
+    if (!selectedTower) {
+      gameLoop.placementInfoRef.current = null;
+    }
+  }, [selectedTower, gameLoop]);
 
   const handleStartWave = useCallback(() => {
     gameLoop.startNextWave();
@@ -420,6 +495,9 @@ function PlayPageContent() {
           ref={canvasRef}
           className="block cursor-pointer touch-none"
           onClick={handleCanvasTap}
+          onMouseMove={handleCanvasMouseMove}
+          onMouseLeave={handleCanvasMouseLeave}
+          onTouchMove={handleCanvasTouchMove}
           style={{ imageRendering: 'pixelated' }}
         />
 

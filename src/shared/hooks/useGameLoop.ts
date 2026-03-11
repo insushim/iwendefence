@@ -7,7 +7,7 @@ import { useRef, useEffect, useCallback } from 'react';
 import { useGameStore } from '../lib/store';
 import { GameEngine } from '../lib/gameEngine';
 import type { GameEngineCallbacks } from '../lib/gameEngine';
-import { renderGame } from '../lib/renderer';
+import { renderGame, type PlacementInfo } from '../lib/renderer';
 import { SoundEngine } from '../lib/soundEngine';
 import type { SFXType } from '../lib/soundEngine';
 import type {
@@ -50,6 +50,8 @@ export interface UseGameLoopReturn {
   getEngine: () => GameEngine | null;
   /** Currently selected tower id */
   selectedTowerId: React.MutableRefObject<string | null>;
+  /** Placement preview info (set by page for hover preview) */
+  placementInfoRef: React.MutableRefObject<PlacementInfo | null>;
 }
 
 // ── Hook ────────────────────────────────────────────────────
@@ -58,6 +60,7 @@ export function useGameLoop(canvasRef: React.RefObject<HTMLCanvasElement | null>
   const engineRef = useRef<GameEngine | null>(null);
   const soundRef = useRef<SoundEngine | null>(null);
   const selectedTowerId = useRef<string | null>(null);
+  const placementInfoRef = useRef<PlacementInfo | null>(null);
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
 
   // Zustand store actions
@@ -133,7 +136,7 @@ export function useGameLoop(canvasRef: React.RefObject<HTMLCanvasElement | null>
 
     // Set up render callback
     engine.setRenderCallback((ctx: CanvasRenderingContext2D, eng: GameEngine) => {
-      renderGame(ctx, eng, selectedTowerId.current);
+      renderGame(ctx, eng, selectedTowerId.current, placementInfoRef.current);
     });
 
     // ── Touch / Click handlers ────────────────────────────
@@ -285,5 +288,6 @@ export function useGameLoop(canvasRef: React.RefObject<HTMLCanvasElement | null>
     playSFX,
     getEngine,
     selectedTowerId,
+    placementInfoRef,
   };
 }

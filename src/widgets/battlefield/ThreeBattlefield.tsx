@@ -1240,7 +1240,8 @@ export default function ThreeBattlefield({
     camera.position.set(8, 10.6, 16.4);
     camera.lookAt(8, 0, 5.1);
 
-    scene.add(new THREE.AmbientLight(0xa5f3fc, 1.32));
+    const ambientLight = new THREE.AmbientLight(0xa5f3fc, 1.32);
+    scene.add(ambientLight);
 
     const keyLight = new THREE.DirectionalLight(0xffffff, 1.65);
     keyLight.position.set(4, 10, 7);
@@ -1253,6 +1254,10 @@ export default function ThreeBattlefield({
     const rimLight = new THREE.PointLight(0x7c3aed, 17, 32, 2);
     rimLight.position.set(-4, 8, 8);
     scene.add(rimLight);
+
+    const warningLight = new THREE.PointLight(0xef4444, 0, 28, 2);
+    warningLight.position.set(7.5, 4.5, 4.5);
+    scene.add(warningLight);
 
     const mapGroup = new THREE.Group();
     const towerGroup = new THREE.Group();
@@ -1337,6 +1342,7 @@ export default function ThreeBattlefield({
     const buildPulses: BuildPulseEffect[] = [];
     const muzzleFlashes: MuzzleFlashEffect[] = [];
     const deathWaves: DeathWaveEffect[] = [];
+    let bossDangerLevel = 0;
     let placementGhost: THREE.Group | null = null;
     let placementGhostType: TowerType | null = null;
     let placementGhostCanPlace = true;
@@ -1676,11 +1682,27 @@ export default function ThreeBattlefield({
         const recoilLift = fireProgress * 0.08;
         const recoilScale = 1 + fireProgress * 0.14;
         const aimAngle = towerAimAngles.get(tower.id);
+        const recoilX = aimAngle !== undefined ? Math.sin(aimAngle) * fireProgress * 0.08 : 0;
+        const recoilZ = aimAngle !== undefined ? Math.cos(aimAngle) * fireProgress * 0.08 : 0;
         mesh.position.set(tower.position.col + 0.5, (1 - appear) * 0.5, rows - tower.position.row - 0.5);
+        mesh.rotation.x = 0;
+        mesh.rotation.z = 0;
         if (aimAngle !== undefined && fireProgress > 0) {
           mesh.rotation.y = mesh.rotation.y * 0.72 + aimAngle * 0.28;
         } else {
           mesh.rotation.y += 0.01 + tower.grade * 0.002;
+        }
+        if (['ARCHER', 'SNIPER'].includes(tower.type)) {
+          mesh.position.x -= recoilX * 1.15;
+          mesh.position.z -= recoilZ * 1.15;
+          mesh.rotation.z = -fireProgress * 0.08;
+        } else if (['CANNON', 'METEOR', 'FLAME', 'PHOENIX'].includes(tower.type)) {
+          mesh.position.x -= recoilX * 0.7;
+          mesh.position.z -= recoilZ * 0.7;
+          mesh.rotation.x = fireProgress * 0.09;
+        } else if (['MAGIC', 'WORD', 'CHRONO', 'VOID', 'HEALER', 'DIVINE'].includes(tower.type)) {
+          mesh.rotation.z = Math.sin(frame * 0.2) * fireProgress * 0.1;
+          mesh.position.y += fireProgress * 0.05;
         }
         mesh.position.y += recoilLift;
         mesh.scale.setScalar((0.72 + appear * 0.28) * (1 + tower.grade * 0.06) * entrancePop * recoilScale);
@@ -1705,6 +1727,7 @@ export default function ThreeBattlefield({
     const syncEnemies = (enemies: Enemy[]) => {
       const seen = new Set<string>();
       const rows = getEngine()?.getMapData()?.grid.length ?? 10;
+      bossDangerLevel = 0;
 
       for (const enemy of enemies) {
         seen.add(enemy.id);
@@ -1755,6 +1778,10 @@ export default function ThreeBattlefield({
           }
 
           const danger = enemy.bossAbilityCooldown && enemy.bossAbilityCooldown < 3 ? 1 : 0;
+          bossDangerLevel = Math.max(
+            bossDangerLevel,
+            enemy.bossAbilityCooldown ? Math.max(0, (3 - enemy.bossAbilityCooldown) / 3) : 0
+          );
           telegraph.visible = danger > 0;
           if (danger) {
             const telegraphPulse = 1 + Math.sin(frame * 0.18) * 0.18;
@@ -1961,6 +1988,16 @@ export default function ThreeBattlefield({
         syncProjectiles(engine);
         syncPlacement();
         updateEffects();
+        ambientLight.intensity = 1.32 - bossDangerLevel * 0.24;
+        keyLight.intensity = 1.65 + bossDangerLevel * 0.55;
+        fillLight.intensity = 15 - bossDangerLevel * 4.5;
+        rimLight.intensity = 17 + bossDangerLevel * 5.5;
+        warningLight.intensity = bossDangerLevel * 22;
+        if (scene.fog) scene.fog.color.setHex(bossDangerLevel > 0.1 ? 0x1b0a12 : 0x071525);
+        (sideGlow.material as THREE.MeshBasicMaterial).color.setHex(bossDangerLevel > 0.1 ? 0xef4444 : 0x0f766e);
+        (rightGlow.material as THREE.MeshBasicMaterial).color.setHex(bossDangerLevel > 0.1 ? 0xef4444 : 0x0f766e);
+        (sideGlow.material as THREE.MeshBasicMaterial).opacity = 0.2 + bossDangerLevel * 0.12;
+        (rightGlow.material as THREE.MeshBasicMaterial).opacity = 0.2 + bossDangerLevel * 0.12;
         for (const pad of buildPads) {
           const pulse = 0.16 + (Math.sin(frame * 0.05 + pad.position.x * 0.9) + 1) * 0.05;
           (pad.material as THREE.MeshBasicMaterial).opacity = pulse;

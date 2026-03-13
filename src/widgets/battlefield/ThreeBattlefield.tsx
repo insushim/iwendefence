@@ -27,6 +27,13 @@ interface BurstEffect {
   spin: number;
 }
 
+interface BuildPulseEffect {
+  ring: THREE.Mesh;
+  glow: THREE.Mesh;
+  life: number;
+  maxLife: number;
+}
+
 const TOWER_COLORS: Record<string, number> = {
   ARCHER: 0x50c878,
   MAGIC: 0xa855f7,
@@ -106,6 +113,49 @@ function basicGlow(color: number, opacity: number): THREE.MeshBasicMaterial {
     opacity,
     side: THREE.DoubleSide,
   });
+}
+
+function applyGhostMaterial(group: THREE.Group, color: number, canPlace: boolean): void {
+  group.traverse((child) => {
+    const mesh = child as THREE.Mesh;
+    if (!('material' in mesh)) return;
+    const material = mesh.material;
+    if (Array.isArray(material)) return;
+    if (material instanceof THREE.MeshStandardMaterial || material instanceof THREE.MeshBasicMaterial) {
+      const cloned = material.clone();
+      cloned.transparent = true;
+      cloned.opacity = canPlace ? 0.62 : 0.42;
+      cloned.depthWrite = false;
+      if (cloned instanceof THREE.MeshStandardMaterial) {
+        cloned.emissive.setHex(color);
+        cloned.emissiveIntensity = canPlace ? 0.42 : 0.2;
+        if (!canPlace) {
+          cloned.color.lerp(new THREE.Color(0x2b0b0b), 0.35);
+        }
+      }
+      mesh.material = cloned;
+    }
+  });
+}
+
+function spawnBuildPulse(
+  x: number,
+  z: number,
+  parent: THREE.Group,
+  pulses: BuildPulseEffect[],
+  color: number
+): void {
+  const ring = new THREE.Mesh(new THREE.RingGeometry(0.28, 0.36, 40), basicGlow(color, 0.8));
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.set(x, 0.13, z);
+
+  const glow = new THREE.Mesh(new THREE.CircleGeometry(0.24, 32), basicGlow(color, 0.22));
+  glow.rotation.x = -Math.PI / 2;
+  glow.position.set(x, 0.125, z);
+
+  parent.add(ring);
+  parent.add(glow);
+  pulses.push({ ring, glow, life: 0.42, maxLife: 0.42 });
 }
 
 function addSelectionRing(group: THREE.Group, color: number): void {
@@ -901,8 +951,10 @@ export default function ThreeBattlefield({
     const towerSpawnFrames = new Map<string, number>();
     const enemySpawnFrames = new Map<string, number>();
     const effects: BurstEffect[] = [];
+    const buildPulses: BuildPulseEffect[] = [];
     let placementGhost: THREE.Group | null = null;
     let placementGhostType: TowerType | null = null;
+    let placementGhostCanPlace = true;
     const placementRing = new THREE.Mesh(
       new THREE.RingGeometry(0.36, 0.47, 32),
       basicGlow(0x22c55e, 0.65)
@@ -1058,6 +1110,7 @@ export default function ThreeBattlefield({
           overlayGroup.remove(placementGhost);
           placementGhost = null;
           placementGhostType = null;
+          placementGhostCanPlace = true;
         }
         return;
       }
@@ -1080,33 +1133,26 @@ export default function ThreeBattlefield({
       placementPlate.visible = true;
       rangeRing.visible = true;
 
-      if (!placementGhost || placementGhostType !== activePlacement.towerType) {
+      if (
+        !placementGhost ||
+        placementGhostType !== activePlacement.towerType ||
+        placementGhostCanPlace !== activePlacement.canPlace
+      ) {
         if (placementGhost) {
           overlayGroup.remove(placementGhost);
         }
         placementGhost = createTowerMesh(activePlacement.towerType, false);
         placementGhostType = activePlacement.towerType;
-        placementGhost.traverse((child) => {
-          const mesh = child as THREE.Mesh;
-          if (!('material' in mesh)) return;
-          const material = mesh.material;
-          if (Array.isArray(material)) return;
-          if (material instanceof THREE.MeshStandardMaterial || material instanceof THREE.MeshBasicMaterial) {
-            mesh.material = material.clone();
-            mesh.material.transparent = true;
-            mesh.material.opacity = 0.58;
-            if ('depthWrite' in mesh.material) {
-              mesh.material.depthWrite = false;
-            }
-          }
-        });
+        placementGhostCanPlace = activePlacement.canPlace;
+        applyGhostMaterial(placementGhost, color, activePlacement.canPlace);
         overlayGroup.add(placementGhost);
       }
 
       if (placementGhost) {
-        placementGhost.position.set(x, 0.02, z);
-        placementGhost.scale.setScalar(0.8);
-        placementGhost.rotation.y += 0.01;
+        const hoverBob = Math.sin(frame * 0.08) * 0.03;
+        placementGhost.position.set(x, 0.04 + hoverBob, z);
+        placementGhost.scale.setScalar(activePlacement.canPlace ? 0.84 : 0.78);
+        placementGhost.rotation.y += activePlacement.canPlace ? 0.014 : 0.008;
       }
     };
 
@@ -1123,6 +1169,13 @@ export default function ThreeBattlefield({
           towerMeshes.set(tower.id, mesh);
           towerSpawnFrames.set(tower.id, frame);
           towerGroup.add(mesh);
+          spawnBuildPulse(
+            tower.position.col + 0.5,
+            rows - tower.position.row - 0.5,
+            overlayGroup,
+            buildPulses,
+            TOWER_COLORS[tower.type] ?? 0xffffff
+          );
         }
 
         const bornAt = towerSpawnFrames.get(tower.id) ?? frame;
@@ -1254,6 +1307,23 @@ export default function ThreeBattlefield({
         if (effect.life <= 0) {
           burstGroup.remove(effect.mesh);
           effects.splice(i, 1);
+        }
+      }
+
+      for (let i = buildPulses.length - 1; i >= 0; i--) {
+        const pulse = buildPulses[i];
+        pulse.life -= 0.016;
+        const progress = 1 - pulse.life / pulse.maxLife;
+        const scale = 1 + progress * 2.4;
+        pulse.ring.scale.setScalar(scale);
+        pulse.glow.scale.setScalar(0.8 + progress * 1.4);
+        (pulse.ring.material as THREE.MeshBasicMaterial).opacity = Math.max(0, 0.7 - progress * 0.7);
+        (pulse.glow.material as THREE.MeshBasicMaterial).opacity = Math.max(0, 0.18 - progress * 0.18);
+
+        if (pulse.life <= 0) {
+          overlayGroup.remove(pulse.ring);
+          overlayGroup.remove(pulse.glow);
+          buildPulses.splice(i, 1);
         }
       }
     };

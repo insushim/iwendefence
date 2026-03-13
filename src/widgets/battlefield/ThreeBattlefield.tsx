@@ -990,6 +990,50 @@ export default function ThreeBattlefield({
     selectedRangeRing.visible = false;
     overlayGroup.add(selectedRangeRing);
 
+    const placementBeacon = new THREE.Group();
+    placementBeacon.visible = false;
+    overlayGroup.add(placementBeacon);
+
+    const beaconDisc = new THREE.Mesh(
+      new THREE.CircleGeometry(0.18, 24),
+      basicGlow(0x22c55e, 0.3)
+    );
+    beaconDisc.rotation.x = -Math.PI / 2;
+    placementBeacon.add(beaconDisc);
+
+    const beaconChevron = new THREE.Mesh(
+      new THREE.ConeGeometry(0.12, 0.26, 3),
+      new THREE.MeshBasicMaterial({ color: 0x86efac, transparent: true, opacity: 0.82 })
+    );
+    beaconChevron.rotation.x = Math.PI;
+    beaconChevron.position.y = 0.26;
+    placementBeacon.add(beaconChevron);
+
+    const invalidMarkV = new THREE.Mesh(
+      new THREE.BoxGeometry(0.06, 0.32, 0.06),
+      new THREE.MeshBasicMaterial({ color: 0xfca5a5, transparent: true, opacity: 0.9 })
+    );
+    invalidMarkV.rotation.z = Math.PI / 4;
+    invalidMarkV.visible = false;
+    placementBeacon.add(invalidMarkV);
+
+    const invalidMarkH = invalidMarkV.clone();
+    invalidMarkH.rotation.z = -Math.PI / 4;
+    invalidMarkH.visible = false;
+    placementBeacon.add(invalidMarkH);
+
+    const placementArrows: THREE.Mesh[] = [];
+    for (let i = 0; i < 4; i++) {
+      const arrow = new THREE.Mesh(
+        new THREE.ConeGeometry(0.06, 0.18, 3),
+        new THREE.MeshBasicMaterial({ color: 0x22d3ee, transparent: true, opacity: 0.6 })
+      );
+      arrow.rotation.x = Math.PI / 2;
+      arrow.rotation.z = (Math.PI / 2) * i;
+      overlayGroup.add(arrow);
+      placementArrows.push(arrow);
+    }
+
     let frame = 0;
     let raf = 0;
     const raycaster = new THREE.Raycaster();
@@ -1106,6 +1150,8 @@ export default function ThreeBattlefield({
         placementRing.visible = false;
         placementPlate.visible = false;
         rangeRing.visible = false;
+        placementBeacon.visible = false;
+        for (const arrow of placementArrows) arrow.visible = false;
         if (placementGhost) {
           overlayGroup.remove(placementGhost);
           placementGhost = null;
@@ -1132,6 +1178,31 @@ export default function ThreeBattlefield({
       placementRing.visible = true;
       placementPlate.visible = true;
       rangeRing.visible = true;
+      placementBeacon.visible = true;
+
+      placementBeacon.position.set(x, 0.18, z);
+      (beaconDisc.material as THREE.MeshBasicMaterial).color.setHex(color);
+      (beaconDisc.material as THREE.MeshBasicMaterial).opacity = activePlacement.canPlace ? 0.26 : 0.2;
+      (beaconChevron.material as THREE.MeshBasicMaterial).color.setHex(activePlacement.canPlace ? 0x86efac : 0xfca5a5);
+      beaconChevron.visible = activePlacement.canPlace;
+      invalidMarkV.visible = !activePlacement.canPlace;
+      invalidMarkH.visible = !activePlacement.canPlace;
+
+      const arrowDistance = Math.max(0.74, Math.min(activePlacement.range * 0.52, 1.45));
+      const arrowColor = TOWER_COLORS[activePlacement.towerType] ?? 0x22d3ee;
+      for (let i = 0; i < placementArrows.length; i++) {
+        const arrow = placementArrows[i];
+        const angle = (Math.PI / 2) * i;
+        arrow.visible = true;
+        arrow.position.set(
+          x + Math.cos(angle) * arrowDistance,
+          0.135,
+          z + Math.sin(angle) * arrowDistance
+        );
+        arrow.rotation.z = -angle + Math.PI / 2;
+        (arrow.material as THREE.MeshBasicMaterial).color.setHex(activePlacement.canPlace ? arrowColor : 0xf87171);
+        (arrow.material as THREE.MeshBasicMaterial).opacity = activePlacement.canPlace ? 0.58 : 0.42;
+      }
 
       if (
         !placementGhost ||
@@ -1347,6 +1418,17 @@ export default function ThreeBattlefield({
         placementRing.rotation.z += 0.01;
         rangeRing.rotation.z -= 0.004;
         selectedRangeRing.rotation.z += 0.003;
+        if (placementBeacon.visible) {
+          placementBeacon.position.y = 0.18 + Math.sin(frame * 0.08) * 0.03;
+          beaconChevron.rotation.y += 0.04;
+          invalidMarkV.rotation.y += 0.02;
+          invalidMarkH.rotation.y -= 0.02;
+          for (let i = 0; i < placementArrows.length; i++) {
+            const arrow = placementArrows[i];
+            if (!arrow.visible) continue;
+            arrow.position.y = 0.135 + Math.sin(frame * 0.1 + i * 0.8) * 0.02;
+          }
+        }
       }
 
       renderer.render(scene, camera);

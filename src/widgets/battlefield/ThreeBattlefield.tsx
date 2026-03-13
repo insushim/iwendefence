@@ -390,6 +390,7 @@ function spawnDeathWave(
   parent: THREE.Group,
   waves: DeathWaveEffect[],
   color: number,
+  type: Enemy['type'],
   boss = false
 ): void {
   const ring = new THREE.Mesh(
@@ -407,17 +408,66 @@ function spawnDeathWave(
   glow.position.set(x, 0.13, z);
 
   const shards: THREE.Mesh[] = [];
-  const shardCount = boss ? 6 : 4;
-  for (let i = 0; i < shardCount; i++) {
-    const shard = new THREE.Mesh(
-      new THREE.PlaneGeometry(boss ? 0.14 : 0.1, boss ? 0.34 : 0.24),
-      basicGlow(0xffffff, boss ? 0.5 : 0.36)
-    );
-    shard.rotation.x = -Math.PI / 2;
-    shard.rotation.z = (Math.PI * 2 * i) / shardCount;
-    shard.position.set(x, 0.141, z);
-    parent.add(shard);
-    shards.push(shard);
+  const shardMaterialOpacity = boss ? 0.5 : 0.36;
+  if (type === 'SLIME') {
+    for (let i = 0; i < 5; i++) {
+      const shard = new THREE.Mesh(
+        new THREE.CircleGeometry(0.05 + i * 0.01, 14),
+        basicGlow(0xffffff, shardMaterialOpacity)
+      );
+      shard.rotation.x = -Math.PI / 2;
+      shard.position.set(x, 0.141, z);
+      parent.add(shard);
+      shards.push(shard);
+    }
+  } else if (FLYING_TYPES.has(type)) {
+    for (let i = 0; i < 4; i++) {
+      const shard = new THREE.Mesh(
+        new THREE.PlaneGeometry(0.08, 0.26),
+        basicGlow(0xffffff, shardMaterialOpacity)
+      );
+      shard.rotation.x = -Math.PI / 2;
+      shard.rotation.z = (Math.PI / 2) * i + Math.PI / 4;
+      shard.position.set(x, 0.141, z);
+      parent.add(shard);
+      shards.push(shard);
+    }
+  } else if (ARMORED_TYPES.has(type)) {
+    for (let i = 0; i < 4; i++) {
+      const shard = new THREE.Mesh(
+        new THREE.PlaneGeometry(0.1, 0.32),
+        basicGlow(0xffffff, shardMaterialOpacity)
+      );
+      shard.rotation.x = -Math.PI / 2;
+      shard.rotation.z = (Math.PI / 2) * i;
+      shard.position.set(x, 0.141, z);
+      parent.add(shard);
+      shards.push(shard);
+    }
+  } else if (CASTER_TYPES.has(type)) {
+    for (let i = 0; i < 2; i++) {
+      const shard = new THREE.Mesh(
+        new THREE.RingGeometry(0.08 + i * 0.08, 0.11 + i * 0.08, 20),
+        basicGlow(0xffffff, shardMaterialOpacity)
+      );
+      shard.rotation.x = -Math.PI / 2;
+      shard.position.set(x, 0.141 + i * 0.002, z);
+      parent.add(shard);
+      shards.push(shard);
+    }
+  } else {
+    const shardCount = boss ? 6 : 4;
+    for (let i = 0; i < shardCount; i++) {
+      const shard = new THREE.Mesh(
+        new THREE.PlaneGeometry(boss ? 0.14 : 0.1, boss ? 0.34 : 0.24),
+        basicGlow(0xffffff, shardMaterialOpacity)
+      );
+      shard.rotation.x = -Math.PI / 2;
+      shard.rotation.z = (Math.PI * 2 * i) / shardCount;
+      shard.position.set(x, 0.141, z);
+      parent.add(shard);
+      shards.push(shard);
+    }
   }
 
   parent.add(ring);
@@ -1723,9 +1773,10 @@ export default function ThreeBattlefield({
         if (seen.has(id)) continue;
         const mat = (mesh.children[0] as THREE.Mesh | undefined)?.material;
         const color = mat instanceof THREE.MeshStandardMaterial ? mat.color.getHex() : 0xef4444;
-        const isBoss = BOSS_TYPES.has((mesh.userData.type as string) ?? '');
+        const enemyType = mesh.userData.type as Enemy['type'];
+        const isBoss = BOSS_TYPES.has(enemyType);
         spawnBurst(mesh, burstGroup, effects, color, isBoss ? 16 : 8, 1.8);
-        spawnDeathWave(mesh.position.x, mesh.position.z, overlayGroup, deathWaves, color, isBoss);
+        spawnDeathWave(mesh.position.x, mesh.position.z, overlayGroup, deathWaves, color, enemyType, isBoss);
         enemyGroup.remove(mesh);
         enemyMeshes.delete(id);
         enemySpawnFrames.delete(id);

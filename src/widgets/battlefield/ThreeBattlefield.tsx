@@ -38,6 +38,7 @@ interface BuildPulseEffect {
 interface MuzzleFlashEffect {
   burst: THREE.Mesh;
   ring: THREE.Mesh;
+  sparks: THREE.Mesh[];
   life: number;
   maxLife: number;
 }
@@ -320,7 +321,8 @@ function spawnMuzzleFlash(
   z: number,
   parent: THREE.Group,
   flashes: MuzzleFlashEffect[],
-  color: number
+  color: number,
+  type: TowerType
 ): void {
   const burst = new THREE.Mesh(
     new THREE.CircleGeometry(0.12, 6),
@@ -336,9 +338,50 @@ function spawnMuzzleFlash(
   ring.rotation.x = -Math.PI / 2;
   ring.position.set(x, 0.18, z);
 
+  const sparks: THREE.Mesh[] = [];
+  if (type === 'ARCHER' || type === 'SNIPER') {
+    for (let i = 0; i < 2; i++) {
+      const spark = new THREE.Mesh(new THREE.PlaneGeometry(0.2, 0.03), basicGlow(color, 0.72));
+      spark.rotation.x = -Math.PI / 2;
+      spark.rotation.z = i === 0 ? Math.PI / 8 : -Math.PI / 8;
+      spark.position.set(x, 0.185, z);
+      parent.add(spark);
+      sparks.push(spark);
+    }
+  } else if (type === 'HEALER' || type === 'DIVINE') {
+    const vertical = new THREE.Mesh(new THREE.PlaneGeometry(0.05, 0.2), basicGlow(color, 0.68));
+    vertical.rotation.x = -Math.PI / 2;
+    vertical.position.set(x, 0.185, z);
+    parent.add(vertical);
+    sparks.push(vertical);
+
+    const horizontal = new THREE.Mesh(new THREE.PlaneGeometry(0.2, 0.05), basicGlow(0xffffff, 0.78));
+    horizontal.rotation.x = -Math.PI / 2;
+    horizontal.position.set(x, 0.186, z);
+    parent.add(horizontal);
+    sparks.push(horizontal);
+  } else if (type === 'WORD' || type === 'MAGIC' || type === 'CHRONO' || type === 'VOID') {
+    for (let i = 0; i < 2; i++) {
+      const spark = new THREE.Mesh(new THREE.RingGeometry(0.05 + i * 0.05, 0.07 + i * 0.05, 18), basicGlow(color, 0.52));
+      spark.rotation.x = -Math.PI / 2;
+      spark.position.set(x, 0.186 + i * 0.002, z);
+      parent.add(spark);
+      sparks.push(spark);
+    }
+  } else {
+    for (let i = 0; i < 4; i++) {
+      const spark = new THREE.Mesh(new THREE.PlaneGeometry(0.04, 0.16), basicGlow(color, 0.74));
+      spark.rotation.x = -Math.PI / 2;
+      spark.rotation.z = (Math.PI / 2) * i;
+      spark.position.set(x, 0.185, z);
+      parent.add(spark);
+      sparks.push(spark);
+    }
+  }
+
   parent.add(burst);
   parent.add(ring);
-  flashes.push({ burst, ring, life: 0.18, maxLife: 0.18 });
+  flashes.push({ burst, ring, sparks, life: 0.18, maxLife: 0.18 });
 }
 
 function spawnDeathWave(
@@ -380,6 +423,52 @@ function spawnDeathWave(
   parent.add(ring);
   parent.add(glow);
   waves.push({ ring, glow, shards, life: boss ? 0.46 : 0.34, maxLife: boss ? 0.46 : 0.34 });
+}
+
+function buildBossTelegraph(type: Enemy['type']): THREE.Group {
+  const telegraph = new THREE.Group();
+  telegraph.userData.bossTelegraph = true;
+
+  const outerRing = new THREE.Mesh(new THREE.RingGeometry(0.88, 1.08, 48), basicGlow(0xef4444, 0.18));
+  outerRing.rotation.x = -Math.PI / 2;
+  outerRing.position.y = 0.03;
+  outerRing.userData.outerRing = true;
+  telegraph.add(outerRing);
+
+  if (type === 'HYDRA') {
+    for (let i = 0; i < 3; i++) {
+      const arc = new THREE.Mesh(new THREE.RingGeometry(0.3 + i * 0.16, 0.36 + i * 0.16, 24, 1, 0, Math.PI * 0.7), basicGlow(0xfca5a5, 0.24));
+      arc.rotation.x = -Math.PI / 2;
+      arc.rotation.z = -Math.PI / 3 + i * (Math.PI / 3);
+      arc.position.y = 0.031;
+      telegraph.add(arc);
+    }
+  } else if (type === 'DRAGON' || type === 'PHOENIX_CHICK') {
+    for (let i = 0; i < 4; i++) {
+      const flame = new THREE.Mesh(new THREE.PlaneGeometry(0.14, 0.52), basicGlow(0xfb7185, 0.22));
+      flame.rotation.x = -Math.PI / 2;
+      flame.rotation.z = (Math.PI / 2) * i;
+      flame.position.y = 0.031;
+      telegraph.add(flame);
+    }
+  } else if (type === 'LICH_KING' || type === 'WORD_DESTROYER') {
+    for (let i = 0; i < 2; i++) {
+      const sigil = new THREE.Mesh(new THREE.RingGeometry(0.24 + i * 0.18, 0.28 + i * 0.18, 24), basicGlow(0xf0abfc, 0.24));
+      sigil.rotation.x = -Math.PI / 2;
+      sigil.position.y = 0.031 + i * 0.002;
+      telegraph.add(sigil);
+    }
+  } else {
+    for (let i = 0; i < 4; i++) {
+      const spike = new THREE.Mesh(new THREE.PlaneGeometry(0.12, 0.46), basicGlow(0xfca5a5, 0.2));
+      spike.rotation.x = -Math.PI / 2;
+      spike.rotation.z = (Math.PI / 2) * i;
+      spike.position.y = 0.031;
+      telegraph.add(spike);
+    }
+  }
+
+  return telegraph;
 }
 
 function addSelectionRing(group: THREE.Group, color: number): void {
@@ -1611,22 +1700,7 @@ export default function ThreeBattlefield({
 
           let telegraph = mesh.children.find((child) => child.userData.bossTelegraph) as THREE.Group | undefined;
           if (!telegraph) {
-            telegraph = new THREE.Group();
-            telegraph.userData.bossTelegraph = true;
-
-            const outerRing = new THREE.Mesh(new THREE.RingGeometry(0.88, 1.08, 48), basicGlow(0xef4444, 0.18));
-            outerRing.rotation.x = -Math.PI / 2;
-            outerRing.position.y = 0.03;
-            outerRing.userData.outerRing = true;
-            telegraph.add(outerRing);
-
-            for (let i = 0; i < 4; i++) {
-              const spike = new THREE.Mesh(new THREE.PlaneGeometry(0.12, 0.46), basicGlow(0xfca5a5, 0.2));
-              spike.rotation.x = -Math.PI / 2;
-              spike.rotation.z = (Math.PI / 2) * i;
-              spike.position.y = 0.031;
-              telegraph.add(spike);
-            }
+            telegraph = buildBossTelegraph(enemy.type);
             mesh.add(telegraph);
           }
 
@@ -1682,7 +1756,8 @@ export default function ThreeBattlefield({
               sourceTower.position.z,
               overlayGroup,
               muzzleFlashes,
-              TOWER_COLORS[projectile.towerType] ?? 0xffffff
+              TOWER_COLORS[projectile.towerType] ?? 0xffffff,
+              projectile.towerType
             );
           }
         }
@@ -1778,10 +1853,17 @@ export default function ThreeBattlefield({
         flash.burst.rotation.z += 0.08;
         (flash.burst.material as THREE.MeshBasicMaterial).opacity = Math.max(0, 0.82 - progress * 0.82);
         (flash.ring.material as THREE.MeshBasicMaterial).opacity = Math.max(0, 0.58 - progress * 0.58);
+        for (const spark of flash.sparks) {
+          const material = spark.material as THREE.MeshBasicMaterial;
+          spark.scale.setScalar(1 + progress * 1.1);
+          spark.rotation.z += 0.06;
+          material.opacity = Math.max(0, material.opacity - 0.08);
+        }
 
         if (flash.life <= 0) {
           overlayGroup.remove(flash.burst);
           overlayGroup.remove(flash.ring);
+          for (const spark of flash.sparks) overlayGroup.remove(spark);
           muzzleFlashes.splice(i, 1);
         }
       }

@@ -35,6 +35,13 @@ interface BuildPulseEffect {
   maxLife: number;
 }
 
+interface MuzzleFlashEffect {
+  burst: THREE.Mesh;
+  ring: THREE.Mesh;
+  life: number;
+  maxLife: number;
+}
+
 const TOWER_COLORS: Record<string, number> = {
   ARCHER: 0x50c878,
   MAGIC: 0xa855f7,
@@ -298,6 +305,32 @@ function createPlacementGlyph(type: TowerType, color: number): THREE.Group {
   }
 
   return group;
+}
+
+function spawnMuzzleFlash(
+  x: number,
+  z: number,
+  parent: THREE.Group,
+  flashes: MuzzleFlashEffect[],
+  color: number
+): void {
+  const burst = new THREE.Mesh(
+    new THREE.CircleGeometry(0.12, 6),
+    basicGlow(0xffffff, 0.82)
+  );
+  burst.rotation.x = -Math.PI / 2;
+  burst.position.set(x, 0.22, z);
+
+  const ring = new THREE.Mesh(
+    new THREE.RingGeometry(0.08, 0.14, 20),
+    basicGlow(color, 0.58)
+  );
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.set(x, 0.18, z);
+
+  parent.add(burst);
+  parent.add(ring);
+  flashes.push({ burst, ring, life: 0.18, maxLife: 0.18 });
 }
 
 function addSelectionRing(group: THREE.Group, color: number): void {
@@ -1113,6 +1146,7 @@ export default function ThreeBattlefield({
     const enemyHitFrames = new Map<string, number>();
     const effects: BurstEffect[] = [];
     const buildPulses: BuildPulseEffect[] = [];
+    const muzzleFlashes: MuzzleFlashEffect[] = [];
     let placementGhost: THREE.Group | null = null;
     let placementGhostType: TowerType | null = null;
     let placementGhostCanPlace = true;
@@ -1518,6 +1552,40 @@ export default function ThreeBattlefield({
           aura.rotation.z -= 0.025;
           (aura.material as THREE.MeshBasicMaterial).opacity = enemy.bossAbilityCooldown && enemy.bossAbilityCooldown < 3 ? 0.42 : 0.22;
           (aura.material as THREE.MeshBasicMaterial).color.setHex(enemy.bossAbilityCooldown && enemy.bossAbilityCooldown < 3 ? 0xef4444 : enemyColor);
+
+          let telegraph = mesh.children.find((child) => child.userData.bossTelegraph) as THREE.Group | undefined;
+          if (!telegraph) {
+            telegraph = new THREE.Group();
+            telegraph.userData.bossTelegraph = true;
+
+            const outerRing = new THREE.Mesh(new THREE.RingGeometry(0.88, 1.08, 48), basicGlow(0xef4444, 0.18));
+            outerRing.rotation.x = -Math.PI / 2;
+            outerRing.position.y = 0.03;
+            outerRing.userData.outerRing = true;
+            telegraph.add(outerRing);
+
+            for (let i = 0; i < 4; i++) {
+              const spike = new THREE.Mesh(new THREE.PlaneGeometry(0.12, 0.46), basicGlow(0xfca5a5, 0.2));
+              spike.rotation.x = -Math.PI / 2;
+              spike.rotation.z = (Math.PI / 2) * i;
+              spike.position.y = 0.031;
+              telegraph.add(spike);
+            }
+            mesh.add(telegraph);
+          }
+
+          const danger = enemy.bossAbilityCooldown && enemy.bossAbilityCooldown < 3 ? 1 : 0;
+          telegraph.visible = danger > 0;
+          if (danger) {
+            const telegraphPulse = 1 + Math.sin(frame * 0.18) * 0.18;
+            telegraph.scale.setScalar(telegraphPulse);
+            telegraph.rotation.y -= 0.04;
+            for (const child of telegraph.children) {
+              const mat = (child as THREE.Mesh).material;
+              if (Array.isArray(mat) || !(mat instanceof THREE.MeshBasicMaterial)) continue;
+              mat.opacity = child.userData.outerRing ? 0.42 : 0.26;
+            }
+          }
         }
       }
 
@@ -1543,6 +1611,16 @@ export default function ThreeBattlefield({
           projectileMeshes.set(projectile.id, mesh);
           projectileGroup.add(mesh);
           towerFireFrames.set(projectile.sourceId, frame);
+          const sourceTower = towerMeshes.get(projectile.sourceId);
+          if (sourceTower) {
+            spawnMuzzleFlash(
+              sourceTower.position.x,
+              sourceTower.position.z,
+              overlayGroup,
+              muzzleFlashes,
+              TOWER_COLORS[projectile.towerType] ?? 0xffffff
+            );
+          }
         }
         projectileTargets.set(projectile.id, projectile.targetId);
 
@@ -1624,6 +1702,23 @@ export default function ThreeBattlefield({
           overlayGroup.remove(pulse.glow);
           for (const sigil of pulse.sigils) overlayGroup.remove(sigil);
           buildPulses.splice(i, 1);
+        }
+      }
+
+      for (let i = muzzleFlashes.length - 1; i >= 0; i--) {
+        const flash = muzzleFlashes[i];
+        flash.life -= 0.016;
+        const progress = 1 - flash.life / flash.maxLife;
+        flash.burst.scale.setScalar(0.9 + progress * 1.6);
+        flash.ring.scale.setScalar(1 + progress * 1.8);
+        flash.burst.rotation.z += 0.08;
+        (flash.burst.material as THREE.MeshBasicMaterial).opacity = Math.max(0, 0.82 - progress * 0.82);
+        (flash.ring.material as THREE.MeshBasicMaterial).opacity = Math.max(0, 0.58 - progress * 0.58);
+
+        if (flash.life <= 0) {
+          overlayGroup.remove(flash.burst);
+          overlayGroup.remove(flash.ring);
+          muzzleFlashes.splice(i, 1);
         }
       }
     };

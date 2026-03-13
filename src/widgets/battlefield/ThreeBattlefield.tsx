@@ -158,6 +158,95 @@ function spawnBuildPulse(
   pulses.push({ ring, glow, life: 0.42, maxLife: 0.42 });
 }
 
+function createPlacementGlyph(type: TowerType, color: number): THREE.Group {
+  const group = new THREE.Group();
+  const material = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.84 });
+
+  switch (type) {
+    case 'ARCHER':
+    case 'SNIPER': {
+      const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.34, 10), material);
+      shaft.rotation.z = Math.PI / 2;
+      shaft.position.y = 0.02;
+      group.add(shaft);
+
+      const head = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.14, 3), material);
+      head.rotation.z = -Math.PI / 2;
+      head.position.set(0.22, 0.02, 0);
+      group.add(head);
+      break;
+    }
+    case 'CANNON':
+    case 'METEOR':
+    case 'FLAME':
+    case 'PHOENIX': {
+      const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.07, 0.26, 12), material);
+      barrel.rotation.z = Math.PI / 2;
+      barrel.position.y = 0.04;
+      group.add(barrel);
+
+      const muzzle = new THREE.Mesh(new THREE.TorusGeometry(0.08, 0.018, 8, 18), material);
+      muzzle.rotation.y = Math.PI / 2;
+      muzzle.position.set(0.16, 0.04, 0);
+      group.add(muzzle);
+      break;
+    }
+    case 'HEALER':
+    case 'DIVINE': {
+      const vertical = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.28, 0.04), material);
+      vertical.position.y = 0.03;
+      group.add(vertical);
+
+      const horizontal = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.06, 0.04), material);
+      horizontal.position.y = 0.03;
+      group.add(horizontal);
+      break;
+    }
+    case 'WORD': {
+      const slab = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.24, 0.04), material);
+      slab.position.y = 0.04;
+      group.add(slab);
+
+      const line = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.28, 0.04), material);
+      line.position.set(0.12, 0.04, 0);
+      group.add(line);
+      break;
+    }
+    case 'BARRICADE': {
+      for (let i = -1; i <= 1; i++) {
+        const spike = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.18, 5), material);
+        spike.position.set(i * 0.11, 0.04, 0);
+        group.add(spike);
+      }
+      break;
+    }
+    case 'GOLDMINE': {
+      const nugget = new THREE.Mesh(new THREE.OctahedronGeometry(0.1, 0), material);
+      nugget.position.y = 0.05;
+      group.add(nugget);
+
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.16, 0.018, 8, 20), material);
+      ring.rotation.x = Math.PI / 2;
+      ring.position.y = -0.01;
+      group.add(ring);
+      break;
+    }
+    default: {
+      const core = new THREE.Mesh(new THREE.SphereGeometry(0.08, 12, 12), material);
+      core.position.y = 0.05;
+      group.add(core);
+
+      const halo = new THREE.Mesh(new THREE.TorusGeometry(0.16, 0.018, 8, 20), material);
+      halo.rotation.x = Math.PI / 2;
+      halo.position.y = 0.02;
+      group.add(halo);
+      break;
+    }
+  }
+
+  return group;
+}
+
 function addSelectionRing(group: THREE.Group, color: number): void {
   const ring = new THREE.Mesh(
     new THREE.TorusGeometry(0.46, 0.03, 8, 40),
@@ -955,6 +1044,8 @@ export default function ThreeBattlefield({
     let placementGhost: THREE.Group | null = null;
     let placementGhostType: TowerType | null = null;
     let placementGhostCanPlace = true;
+    let placementGlyph: THREE.Group | null = null;
+    let placementGlyphType: TowerType | null = null;
     const placementRing = new THREE.Mesh(
       new THREE.RingGeometry(0.36, 0.47, 32),
       basicGlow(0x22c55e, 0.65)
@@ -1152,6 +1243,11 @@ export default function ThreeBattlefield({
         rangeRing.visible = false;
         placementBeacon.visible = false;
         for (const arrow of placementArrows) arrow.visible = false;
+        if (placementGlyph) {
+          placementBeacon.remove(placementGlyph);
+          placementGlyph = null;
+          placementGlyphType = null;
+        }
         if (placementGhost) {
           overlayGroup.remove(placementGhost);
           placementGhost = null;
@@ -1187,6 +1283,32 @@ export default function ThreeBattlefield({
       beaconChevron.visible = activePlacement.canPlace;
       invalidMarkV.visible = !activePlacement.canPlace;
       invalidMarkH.visible = !activePlacement.canPlace;
+
+      if (!placementGlyph || placementGlyphType !== activePlacement.towerType) {
+        if (placementGlyph) {
+          placementBeacon.remove(placementGlyph);
+        }
+        placementGlyph = createPlacementGlyph(activePlacement.towerType, TOWER_COLORS[activePlacement.towerType] ?? 0xffffff);
+        placementGlyphType = activePlacement.towerType;
+        placementGlyph.position.set(0, 0.14, 0);
+        placementBeacon.add(placementGlyph);
+      }
+
+      if (placementGlyph) {
+        placementGlyph.rotation.y += activePlacement.canPlace ? 0.02 : 0.01;
+        placementGlyph.position.y = 0.14 + Math.sin(frame * 0.11) * 0.025;
+        placementGlyph.scale.setScalar(activePlacement.canPlace ? 1 : 0.92);
+        placementGlyph.traverse((child) => {
+          const mesh = child as THREE.Mesh;
+          if (!('material' in mesh)) return;
+          const material = mesh.material;
+          if (Array.isArray(material)) return;
+          if (material instanceof THREE.MeshBasicMaterial) {
+            material.color.setHex(activePlacement.canPlace ? TOWER_COLORS[activePlacement.towerType] ?? 0xffffff : 0xfca5a5);
+            material.opacity = activePlacement.canPlace ? 0.86 : 0.58;
+          }
+        });
+      }
 
       const arrowDistance = Math.max(0.74, Math.min(activePlacement.range * 0.52, 1.45));
       const arrowColor = TOWER_COLORS[activePlacement.towerType] ?? 0x22d3ee;
@@ -1251,9 +1373,10 @@ export default function ThreeBattlefield({
 
         const bornAt = towerSpawnFrames.get(tower.id) ?? frame;
         const appear = Math.min(1, (frame - bornAt) / 18);
+        const entrancePop = 1 + Math.max(0, 1 - appear) * 0.38;
         mesh.position.set(tower.position.col + 0.5, (1 - appear) * 0.5, rows - tower.position.row - 0.5);
         mesh.rotation.y += 0.01 + tower.grade * 0.002;
-        mesh.scale.setScalar((0.72 + appear * 0.28) * (1 + tower.grade * 0.06));
+        mesh.scale.setScalar((0.72 + appear * 0.28) * (1 + tower.grade * 0.06) * entrancePop);
         applyTowerIdleMotion(mesh, tower, frame);
 
         const hasRing = mesh.children.some((child) => child.userData.selectionRing);

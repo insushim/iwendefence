@@ -42,6 +42,14 @@ interface MuzzleFlashEffect {
   maxLife: number;
 }
 
+interface DeathWaveEffect {
+  ring: THREE.Mesh;
+  glow: THREE.Mesh;
+  shards: THREE.Mesh[];
+  life: number;
+  maxLife: number;
+}
+
 const TOWER_COLORS: Record<string, number> = {
   ARCHER: 0x50c878,
   MAGIC: 0xa855f7,
@@ -331,6 +339,47 @@ function spawnMuzzleFlash(
   parent.add(burst);
   parent.add(ring);
   flashes.push({ burst, ring, life: 0.18, maxLife: 0.18 });
+}
+
+function spawnDeathWave(
+  x: number,
+  z: number,
+  parent: THREE.Group,
+  waves: DeathWaveEffect[],
+  color: number,
+  boss = false
+): void {
+  const ring = new THREE.Mesh(
+    new THREE.RingGeometry(boss ? 0.24 : 0.18, boss ? 0.36 : 0.28, 32),
+    basicGlow(color, boss ? 0.72 : 0.58)
+  );
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.set(x, 0.14, z);
+
+  const glow = new THREE.Mesh(
+    new THREE.CircleGeometry(boss ? 0.24 : 0.18, 28),
+    basicGlow(color, boss ? 0.22 : 0.16)
+  );
+  glow.rotation.x = -Math.PI / 2;
+  glow.position.set(x, 0.13, z);
+
+  const shards: THREE.Mesh[] = [];
+  const shardCount = boss ? 6 : 4;
+  for (let i = 0; i < shardCount; i++) {
+    const shard = new THREE.Mesh(
+      new THREE.PlaneGeometry(boss ? 0.14 : 0.1, boss ? 0.34 : 0.24),
+      basicGlow(0xffffff, boss ? 0.5 : 0.36)
+    );
+    shard.rotation.x = -Math.PI / 2;
+    shard.rotation.z = (Math.PI * 2 * i) / shardCount;
+    shard.position.set(x, 0.141, z);
+    parent.add(shard);
+    shards.push(shard);
+  }
+
+  parent.add(ring);
+  parent.add(glow);
+  waves.push({ ring, glow, shards, life: boss ? 0.46 : 0.34, maxLife: boss ? 0.46 : 0.34 });
 }
 
 function addSelectionRing(group: THREE.Group, color: number): void {
@@ -1142,11 +1191,13 @@ export default function ThreeBattlefield({
     const buildPads: THREE.Mesh[] = [];
     const towerSpawnFrames = new Map<string, number>();
     const towerFireFrames = new Map<string, number>();
+    const towerAimAngles = new Map<string, number>();
     const enemySpawnFrames = new Map<string, number>();
     const enemyHitFrames = new Map<string, number>();
     const effects: BurstEffect[] = [];
     const buildPulses: BuildPulseEffect[] = [];
     const muzzleFlashes: MuzzleFlashEffect[] = [];
+    const deathWaves: DeathWaveEffect[] = [];
     let placementGhost: THREE.Group | null = null;
     let placementGhostType: TowerType | null = null;
     let placementGhostCanPlace = true;
@@ -1485,8 +1536,13 @@ export default function ThreeBattlefield({
         const fireProgress = Math.max(0, 1 - (frame - fireAt) / 10);
         const recoilLift = fireProgress * 0.08;
         const recoilScale = 1 + fireProgress * 0.14;
+        const aimAngle = towerAimAngles.get(tower.id);
         mesh.position.set(tower.position.col + 0.5, (1 - appear) * 0.5, rows - tower.position.row - 0.5);
-        mesh.rotation.y += 0.01 + tower.grade * 0.002;
+        if (aimAngle !== undefined && fireProgress > 0) {
+          mesh.rotation.y = mesh.rotation.y * 0.72 + aimAngle * 0.28;
+        } else {
+          mesh.rotation.y += 0.01 + tower.grade * 0.002;
+        }
         mesh.position.y += recoilLift;
         mesh.scale.setScalar((0.72 + appear * 0.28) * (1 + tower.grade * 0.06) * entrancePop * recoilScale);
         applyTowerIdleMotion(mesh, tower, frame);
@@ -1593,10 +1649,13 @@ export default function ThreeBattlefield({
         if (seen.has(id)) continue;
         const mat = (mesh.children[0] as THREE.Mesh | undefined)?.material;
         const color = mat instanceof THREE.MeshStandardMaterial ? mat.color.getHex() : 0xef4444;
-        spawnBurst(mesh, burstGroup, effects, color, BOSS_TYPES.has((mesh.userData.type as string) ?? '') ? 16 : 8, 1.8);
+        const isBoss = BOSS_TYPES.has((mesh.userData.type as string) ?? '');
+        spawnBurst(mesh, burstGroup, effects, color, isBoss ? 16 : 8, 1.8);
+        spawnDeathWave(mesh.position.x, mesh.position.z, overlayGroup, deathWaves, color, isBoss);
         enemyGroup.remove(mesh);
         enemyMeshes.delete(id);
         enemySpawnFrames.delete(id);
+        enemyHitFrames.delete(id);
       }
     };
 
@@ -1613,6 +1672,11 @@ export default function ThreeBattlefield({
           towerFireFrames.set(projectile.sourceId, frame);
           const sourceTower = towerMeshes.get(projectile.sourceId);
           if (sourceTower) {
+            const targetEnemy = enemyMeshes.get(projectile.targetId);
+            if (targetEnemy) {
+              const aim = Math.atan2(targetEnemy.position.x - sourceTower.position.x, targetEnemy.position.z - sourceTower.position.z);
+              towerAimAngles.set(projectile.sourceId, aim);
+            }
             spawnMuzzleFlash(
               sourceTower.position.x,
               sourceTower.position.z,
@@ -1719,6 +1783,35 @@ export default function ThreeBattlefield({
           overlayGroup.remove(flash.burst);
           overlayGroup.remove(flash.ring);
           muzzleFlashes.splice(i, 1);
+        }
+      }
+
+      for (let i = deathWaves.length - 1; i >= 0; i--) {
+        const wave = deathWaves[i];
+        wave.life -= 0.016;
+        const progress = 1 - wave.life / wave.maxLife;
+        wave.ring.scale.setScalar(1 + progress * 2.2);
+        wave.glow.scale.setScalar(0.8 + progress * 1.7);
+        (wave.ring.material as THREE.MeshBasicMaterial).opacity = Math.max(0, 0.72 - progress * 0.72);
+        (wave.glow.material as THREE.MeshBasicMaterial).opacity = Math.max(0, 0.2 - progress * 0.2);
+
+        for (let j = 0; j < wave.shards.length; j++) {
+          const shard = wave.shards[j];
+          const material = shard.material as THREE.MeshBasicMaterial;
+          const angle = (Math.PI * 2 * j) / wave.shards.length;
+          const spread = 0.18 + progress * 0.42;
+          shard.position.x = wave.ring.position.x + Math.cos(angle) * spread;
+          shard.position.z = wave.ring.position.z + Math.sin(angle) * spread;
+          shard.scale.setScalar(1 + progress * 0.9);
+          shard.rotation.z += 0.04;
+          material.opacity = Math.max(0, 0.5 - progress * 0.5);
+        }
+
+        if (wave.life <= 0) {
+          overlayGroup.remove(wave.ring);
+          overlayGroup.remove(wave.glow);
+          for (const shard of wave.shards) overlayGroup.remove(shard);
+          deathWaves.splice(i, 1);
         }
       }
     };

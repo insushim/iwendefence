@@ -14,6 +14,9 @@ interface ThreeBattlefieldProps {
   getEngine: () => GameEngine | null;
   selectedTowerId: string | null;
   placementInfo: PlacementInfo | null;
+  onTileHover?: (row: number, col: number) => void;
+  onTileLeave?: () => void;
+  onTileSelect?: (row: number, col: number) => void;
 }
 
 interface BurstEffect {
@@ -758,10 +761,16 @@ export default function ThreeBattlefield({
   getEngine,
   selectedTowerId,
   placementInfo,
+  onTileHover,
+  onTileLeave,
+  onTileSelect,
 }: ThreeBattlefieldProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const selectedTowerIdRef = useRef<string | null>(selectedTowerId);
   const placementInfoRef = useRef<PlacementInfo | null>(placementInfo);
+  const onTileHoverRef = useRef<ThreeBattlefieldProps['onTileHover']>(onTileHover);
+  const onTileLeaveRef = useRef<ThreeBattlefieldProps['onTileLeave']>(onTileLeave);
+  const onTileSelectRef = useRef<ThreeBattlefieldProps['onTileSelect']>(onTileSelect);
 
   useEffect(() => {
     selectedTowerIdRef.current = selectedTowerId;
@@ -770,6 +779,18 @@ export default function ThreeBattlefield({
   useEffect(() => {
     placementInfoRef.current = placementInfo;
   }, [placementInfo]);
+
+  useEffect(() => {
+    onTileHoverRef.current = onTileHover;
+  }, [onTileHover]);
+
+  useEffect(() => {
+    onTileLeaveRef.current = onTileLeave;
+  }, [onTileLeave]);
+
+  useEffect(() => {
+    onTileSelectRef.current = onTileSelect;
+  }, [onTileSelect]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -786,17 +807,8 @@ export default function ThreeBattlefield({
     const scene = new THREE.Scene();
     scene.fog = new THREE.Fog(0x071525, 8, 30);
 
-    const aspect = width / height;
-    const frustumHeight = 10.8;
-    const camera = new THREE.OrthographicCamera(
-      (-frustumHeight * aspect) / 2,
-      (frustumHeight * aspect) / 2,
-      frustumHeight / 2,
-      -frustumHeight / 2,
-      0.1,
-      100
-    );
-    camera.position.set(8, 10, 5);
+    const camera = new THREE.PerspectiveCamera(34, width / height, 0.1, 100);
+    camera.position.set(8, 11.4, 12.8);
     camera.lookAt(8, 0, 5);
 
     scene.add(new THREE.AmbientLight(0xa5f3fc, 1.32));
@@ -820,6 +832,15 @@ export default function ThreeBattlefield({
     const overlayGroup = new THREE.Group();
     const burstGroup = new THREE.Group();
     scene.add(mapGroup, towerGroup, enemyGroup, projectileGroup, overlayGroup, burstGroup);
+    const rows = getEngine()?.getMapData()?.grid.length ?? 10;
+    const cols = getEngine()?.getMapData()?.grid[0]?.length ?? 16;
+    const pickPlane = new THREE.Mesh(
+      new THREE.PlaneGeometry(cols, rows),
+      new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, side: THREE.DoubleSide })
+    );
+    pickPlane.rotation.x = -Math.PI / 2;
+    pickPlane.position.set(cols / 2, 0.12, rows / 2);
+    scene.add(pickPlane);
 
     const ground = new THREE.Mesh(
       new THREE.PlaneGeometry(22, 15),
@@ -923,6 +944,60 @@ export default function ThreeBattlefield({
 
     let frame = 0;
     let raf = 0;
+    const raycaster = new THREE.Raycaster();
+    const pointer = new THREE.Vector2();
+    let hoveredKey: string | null = null;
+
+    const pickTile = (clientX: number, clientY: number): { row: number; col: number } | null => {
+      const rect = renderer.domElement.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) return null;
+
+      pointer.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+      pointer.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(pointer, camera);
+
+      const hit = raycaster.intersectObject(pickPlane, false)[0];
+      if (!hit) return null;
+
+      const localX = hit.point.x;
+      const localZ = hit.point.z;
+      const col = Math.floor(localX);
+      const row = rows - Math.floor(localZ) - 1;
+
+      if (col < 0 || col >= cols || row < 0 || row >= rows) return null;
+      return { row, col };
+    };
+
+    const handlePointerMove = (event: PointerEvent) => {
+      const tile = pickTile(event.clientX, event.clientY);
+      if (!tile) {
+        if (hoveredKey !== null) {
+          hoveredKey = null;
+          onTileLeaveRef.current?.();
+        }
+        return;
+      }
+
+      const nextKey = `${tile.row}:${tile.col}`;
+      if (nextKey === hoveredKey) return;
+      hoveredKey = nextKey;
+      onTileHoverRef.current?.(tile.row, tile.col);
+    };
+
+    const handlePointerLeave = () => {
+      hoveredKey = null;
+      onTileLeaveRef.current?.();
+    };
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const tile = pickTile(event.clientX, event.clientY);
+      if (!tile) return;
+      onTileSelectRef.current?.(tile.row, tile.col);
+    };
+
+    renderer.domElement.addEventListener('pointermove', handlePointerMove);
+    renderer.domElement.addEventListener('pointerleave', handlePointerLeave);
+    renderer.domElement.addEventListener('pointerdown', handlePointerDown);
 
     const syncSelectedTowerRing = (towers: Tower[]) => {
       const selectedTower = towers.find((tower) => tower.id === selectedTowerIdRef.current);
@@ -1183,6 +1258,9 @@ export default function ThreeBattlefield({
 
     return () => {
       cancelAnimationFrame(raf);
+      renderer.domElement.removeEventListener('pointermove', handlePointerMove);
+      renderer.domElement.removeEventListener('pointerleave', handlePointerLeave);
+      renderer.domElement.removeEventListener('pointerdown', handlePointerDown);
       renderer.setAnimationLoop(null);
       renderer.dispose();
       renderer.forceContextLoss();
@@ -1190,5 +1268,5 @@ export default function ThreeBattlefield({
     };
   }, [cellSize, getEngine, height, width]);
 
-  return <div ref={hostRef} className="absolute inset-0 pointer-events-none rounded overflow-hidden" />;
+  return <div ref={hostRef} className="absolute inset-0 rounded overflow-hidden" />;
 }

@@ -591,35 +591,17 @@ function PlayPageContent() {
     }
   }, [isRandomTower]);
 
-  const handleCanvasTap = useCallback(
-    (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
-      const canvas = canvasRef.current;
+  const clearPlacementPreview = useCallback(() => {
+    gameLoop.placementInfoRef.current = null;
+    setPlacementPreview(null);
+  }, [gameLoop]);
+
+  const handleGridTap = useCallback((row: number, col: number) => {
       const engine = gameLoop.getEngine();
-      if (!canvas || !engine) return;
+      if (!engine) return;
 
       const mapData = engine.getMapData();
       if (!mapData) return;
-
-      const rect = canvas.getBoundingClientRect();
-      const scaleX = canvas.width / rect.width;
-      const scaleY = canvas.height / rect.height;
-
-      let clientX: number, clientY: number;
-      if ('touches' in e) {
-        if (e.touches.length === 0) return;
-        clientX = e.touches[0].clientX;
-        clientY = e.touches[0].clientY;
-      } else {
-        clientX = e.clientX;
-        clientY = e.clientY;
-      }
-
-      const canvasX = (clientX - rect.left) * scaleX;
-      const canvasY = (clientY - rect.top) * scaleY;
-
-      const cs = engine.getCellSize();
-      const col = Math.floor(canvasX / cs);
-      const row = Math.floor(canvasY / cs);
 
       if (row < 0 || row >= mapData.grid.length || col < 0 || col >= mapData.grid[0].length) return;
 
@@ -713,16 +695,11 @@ function PlayPageContent() {
     [selectedTower, isRandomTower, gold, towers, addTower, gameLoop]
   );
 
-  // ── Placement preview: update placementInfo on hover ──
-  const updatePlacementInfo = useCallback(
-    (clientX: number, clientY: number) => {
+  const handleCanvasTap = useCallback(
+    (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
       const canvas = canvasRef.current;
       const engine = gameLoop.getEngine();
-      if (!canvas || !engine || (!selectedTower && !isRandomTower)) {
-        gameLoop.placementInfoRef.current = null;
-        setPlacementPreview(null);
-        return;
-      }
+      if (!canvas || !engine) return;
 
       const mapData = engine.getMapData();
       if (!mapData) return;
@@ -731,15 +708,43 @@ function PlayPageContent() {
       const scaleX = canvas.width / rect.width;
       const scaleY = canvas.height / rect.height;
 
+      let clientX: number, clientY: number;
+      if ('touches' in e) {
+        if (e.touches.length === 0) return;
+        clientX = e.touches[0].clientX;
+        clientY = e.touches[0].clientY;
+      } else {
+        clientX = e.clientX;
+        clientY = e.clientY;
+      }
+
       const canvasX = (clientX - rect.left) * scaleX;
       const canvasY = (clientY - rect.top) * scaleY;
 
       const cs = engine.getCellSize();
       const col = Math.floor(canvasX / cs);
       const row = Math.floor(canvasY / cs);
+      handleGridTap(row, col);
+    },
+    [gameLoop, handleGridTap]
+  );
+
+  // ── Placement preview: update placementInfo on hover ──
+  const updatePlacementForTile = useCallback(
+    (row: number, col: number) => {
+      const engine = gameLoop.getEngine();
+      if (!engine || (!selectedTower && !isRandomTower)) {
+        gameLoop.placementInfoRef.current = null;
+        setPlacementPreview(null);
+        return;
+      }
+
+      const mapData = engine.getMapData();
+      if (!mapData) return;
 
       if (row < 0 || row >= mapData.grid.length || col < 0 || col >= mapData.grid[0].length) {
         gameLoop.placementInfoRef.current = null;
+        setPlacementPreview(null);
         return;
       }
 
@@ -767,23 +772,51 @@ function PlayPageContent() {
 
   const handleCanvasMouseMove = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
-      updatePlacementInfo(e.clientX, e.clientY);
+      const canvas = canvasRef.current;
+      const engine = gameLoop.getEngine();
+      if (!canvas || !engine) return;
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      const canvasX = (e.clientX - rect.left) * scaleX;
+      const canvasY = (e.clientY - rect.top) * scaleY;
+      const cs = engine.getCellSize();
+      updatePlacementForTile(Math.floor(canvasY / cs), Math.floor(canvasX / cs));
     },
-    [updatePlacementInfo]
+    [gameLoop, updatePlacementForTile]
   );
 
   const handleCanvasTouchMove = useCallback(
     (e: React.TouchEvent<HTMLCanvasElement>) => {
-      if (e.touches.length === 0) return;
-      updatePlacementInfo(e.touches[0].clientX, e.touches[0].clientY);
+      const canvas = canvasRef.current;
+      const engine = gameLoop.getEngine();
+      if (!canvas || !engine || e.touches.length === 0) return;
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      const canvasX = (e.touches[0].clientX - rect.left) * scaleX;
+      const canvasY = (e.touches[0].clientY - rect.top) * scaleY;
+      const cs = engine.getCellSize();
+      updatePlacementForTile(Math.floor(canvasY / cs), Math.floor(canvasX / cs));
     },
-    [updatePlacementInfo]
+    [gameLoop, updatePlacementForTile]
   );
 
   const handleCanvasMouseLeave = useCallback(() => {
-    gameLoop.placementInfoRef.current = null;
-    setPlacementPreview(null);
-  }, [gameLoop]);
+    clearPlacementPreview();
+  }, [clearPlacementPreview]);
+
+  const handleBattlefieldHover = useCallback((row: number, col: number) => {
+    updatePlacementForTile(row, col);
+  }, [updatePlacementForTile]);
+
+  const handleBattlefieldLeave = useCallback(() => {
+    clearPlacementPreview();
+  }, [clearPlacementPreview]);
+
+  const handleBattlefieldSelect = useCallback((row: number, col: number) => {
+    handleGridTap(row, col);
+  }, [handleGridTap]);
 
   // Clear placement info when selectedTower changes or is deselected
   useEffect(() => {
@@ -914,12 +947,15 @@ function PlayPageContent() {
                 getEngine={gameLoop.getEngine}
                 selectedTowerId={selectedPlacedTowerId}
                 placementInfo={placementPreview}
+                onTileHover={handleBattlefieldHover}
+                onTileLeave={handleBattlefieldLeave}
+                onTileSelect={handleBattlefieldSelect}
               />
             </div>
           )}
           <canvas
             ref={canvasRef}
-            className="relative z-10 block cursor-pointer touch-none rounded"
+            className="relative z-10 block touch-none rounded pointer-events-none"
             onClick={handleCanvasTap}
             onMouseMove={handleCanvasMouseMove}
             onMouseLeave={handleCanvasMouseLeave}

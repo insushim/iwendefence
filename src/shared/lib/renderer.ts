@@ -349,7 +349,7 @@ export function renderGame(
   }
 
   // ── Placement Preview (ghost tower + range circle) ──
-  if (placementInfo) {
+  if (placementInfo && renderWorld) {
     drawPlacementPreview(ctx, placementInfo, cellSize);
   }
 

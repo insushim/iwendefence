@@ -901,6 +901,8 @@ export default function ThreeBattlefield({
     const towerSpawnFrames = new Map<string, number>();
     const enemySpawnFrames = new Map<string, number>();
     const effects: BurstEffect[] = [];
+    let placementGhost: THREE.Group | null = null;
+    let placementGhostType: TowerType | null = null;
     const placementRing = new THREE.Mesh(
       new THREE.RingGeometry(0.36, 0.47, 32),
       basicGlow(0x22c55e, 0.65)
@@ -1052,6 +1054,11 @@ export default function ThreeBattlefield({
         placementRing.visible = false;
         placementPlate.visible = false;
         rangeRing.visible = false;
+        if (placementGhost) {
+          overlayGroup.remove(placementGhost);
+          placementGhost = null;
+          placementGhostType = null;
+        }
         return;
       }
 
@@ -1072,6 +1079,35 @@ export default function ThreeBattlefield({
       placementRing.visible = true;
       placementPlate.visible = true;
       rangeRing.visible = true;
+
+      if (!placementGhost || placementGhostType !== activePlacement.towerType) {
+        if (placementGhost) {
+          overlayGroup.remove(placementGhost);
+        }
+        placementGhost = createTowerMesh(activePlacement.towerType, false);
+        placementGhostType = activePlacement.towerType;
+        placementGhost.traverse((child) => {
+          const mesh = child as THREE.Mesh;
+          if (!('material' in mesh)) return;
+          const material = mesh.material;
+          if (Array.isArray(material)) return;
+          if (material instanceof THREE.MeshStandardMaterial || material instanceof THREE.MeshBasicMaterial) {
+            mesh.material = material.clone();
+            mesh.material.transparent = true;
+            mesh.material.opacity = 0.58;
+            if ('depthWrite' in mesh.material) {
+              mesh.material.depthWrite = false;
+            }
+          }
+        });
+        overlayGroup.add(placementGhost);
+      }
+
+      if (placementGhost) {
+        placementGhost.position.set(x, 0.02, z);
+        placementGhost.scale.setScalar(0.8);
+        placementGhost.rotation.y += 0.01;
+      }
     };
 
     const syncTowers = (towers: Tower[]) => {

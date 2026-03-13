@@ -118,6 +118,26 @@ function pickWaveUpgrades(): RoguelikeUpgrade[] {
   return shuffled.slice(0, 3);
 }
 
+function fitBattlefieldSize(containerWidth: number, containerHeight: number): {
+  cellSize: number;
+  width: number;
+  height: number;
+} {
+  const cols = 16;
+  const rows = 10;
+  const horizontalPadding = 32;
+  const verticalPadding = 28;
+  const usableWidth = Math.max(320, containerWidth - horizontalPadding);
+  const usableHeight = Math.max(220, containerHeight - verticalPadding);
+  const cellSize = Math.max(28, Math.floor(Math.min(usableWidth / cols, usableHeight / rows)));
+
+  return {
+    cellSize,
+    width: cols * cellSize,
+    height: rows * cellSize,
+  };
+}
+
 function PlayPageContent() {
   const searchParams = useSearchParams();
   const worldId = (parseInt(searchParams.get('world') || '1', 10) || 1) as WorldId;
@@ -219,17 +239,14 @@ function PlayPageContent() {
       if (!container || !canvas) return;
 
       const rect = container.getBoundingClientRect();
-      const cols = 16;
-      const rows = 10;
-
-      const cs = Math.floor(Math.min(rect.width / cols, rect.height / rows));
+      const { cellSize: cs, width, height } = fitBattlefieldSize(rect.width, rect.height);
       setCellSize(cs);
 
-      canvas.width = cols * cs;
-      canvas.height = rows * cs;
-      canvas.style.width = `${cols * cs}px`;
-      canvas.style.height = `${rows * cs}px`;
-      setCanvasSize({ width: cols * cs, height: rows * cs });
+      canvas.width = width;
+      canvas.height = height;
+      canvas.style.width = `${width}px`;
+      canvas.style.height = `${height}px`;
+      setCanvasSize({ width, height });
 
       return cs;
     };
@@ -805,15 +822,13 @@ function PlayPageContent() {
       if (!container || !canvas) return;
 
       const rect = container.getBoundingClientRect();
-      const cols = 16;
-      const rows = 10;
-      const cs = Math.floor(Math.min(rect.width / cols, rect.height / rows));
+      const { cellSize: cs, width, height } = fitBattlefieldSize(rect.width, rect.height);
       setCellSize(cs);
-      canvas.width = cols * cs;
-      canvas.height = rows * cs;
-      canvas.style.width = `${cols * cs}px`;
-      canvas.style.height = `${rows * cs}px`;
-      setCanvasSize({ width: cols * cs, height: rows * cs });
+      canvas.width = width;
+      canvas.height = height;
+      canvas.style.width = `${width}px`;
+      canvas.style.height = `${height}px`;
+      setCanvasSize({ width, height });
 
       gameLoop.loadStage(stage.mapData, stage.waves, cs);
       const engine = gameLoop.getEngine();

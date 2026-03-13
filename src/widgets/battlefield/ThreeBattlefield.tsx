@@ -760,6 +760,16 @@ export default function ThreeBattlefield({
   placementInfo,
 }: ThreeBattlefieldProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
+  const selectedTowerIdRef = useRef<string | null>(selectedTowerId);
+  const placementInfoRef = useRef<PlacementInfo | null>(placementInfo);
+
+  useEffect(() => {
+    selectedTowerIdRef.current = selectedTowerId;
+  }, [selectedTowerId]);
+
+  useEffect(() => {
+    placementInfoRef.current = placementInfo;
+  }, [placementInfo]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -767,26 +777,32 @@ export default function ThreeBattlefield({
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(width, height, false);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.25));
     renderer.outputColorSpace = THREE.SRGBColorSpace;
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.shadowMap.enabled = false;
     host.innerHTML = '';
     host.appendChild(renderer.domElement);
 
     const scene = new THREE.Scene();
     scene.fog = new THREE.Fog(0x071525, 8, 30);
 
-    const camera = new THREE.PerspectiveCamera(42, width / height, 0.1, 100);
-    camera.position.set(7.8, 9, 12.9);
-    camera.lookAt(7.8, 0.2, 4.8);
+    const aspect = width / height;
+    const frustumHeight = 10.8;
+    const camera = new THREE.OrthographicCamera(
+      (-frustumHeight * aspect) / 2,
+      (frustumHeight * aspect) / 2,
+      frustumHeight / 2,
+      -frustumHeight / 2,
+      0.1,
+      100
+    );
+    camera.position.set(8, 10, 5);
+    camera.lookAt(8, 0, 5);
 
     scene.add(new THREE.AmbientLight(0xa5f3fc, 1.32));
 
     const keyLight = new THREE.DirectionalLight(0xffffff, 1.65);
     keyLight.position.set(4, 10, 7);
-    keyLight.castShadow = true;
-    keyLight.shadow.mapSize.set(2048, 2048);
     scene.add(keyLight);
 
     const fillLight = new THREE.PointLight(0x2dd4bf, 15, 26, 2);
@@ -909,7 +925,7 @@ export default function ThreeBattlefield({
     let raf = 0;
 
     const syncSelectedTowerRing = (towers: Tower[]) => {
-      const selectedTower = towers.find((tower) => tower.id === selectedTowerId);
+      const selectedTower = towers.find((tower) => tower.id === selectedTowerIdRef.current);
       if (!selectedTower) {
         selectedRangeRing.visible = false;
         return;
@@ -963,7 +979,8 @@ export default function ThreeBattlefield({
     };
 
     const syncPlacement = () => {
-      if (!placementInfo) {
+      const activePlacement = placementInfoRef.current;
+      if (!activePlacement) {
         placementRing.visible = false;
         placementPlate.visible = false;
         rangeRing.visible = false;
@@ -971,14 +988,14 @@ export default function ThreeBattlefield({
       }
 
       const rows = getEngine()?.getMapData()?.grid.length ?? 10;
-      const x = placementInfo.col + 0.5;
-      const z = rows - placementInfo.row - 0.5;
-      const color = placementInfo.canPlace ? 0x22c55e : 0xef4444;
-      const rangeScale = Math.max(1.1, placementInfo.range / 2.9);
+      const x = activePlacement.col + 0.5;
+      const z = rows - activePlacement.row - 0.5;
+      const color = activePlacement.canPlace ? 0x22c55e : 0xef4444;
+      const rangeScale = Math.max(1.1, activePlacement.range / 2.9);
 
       (placementRing.material as THREE.MeshBasicMaterial).color.setHex(color);
       (placementPlate.material as THREE.MeshBasicMaterial).color.setHex(color);
-      (rangeRing.material as THREE.MeshBasicMaterial).color.setHex(placementInfo.canPlace ? 0x22d3ee : 0xfca5a5);
+      (rangeRing.material as THREE.MeshBasicMaterial).color.setHex(activePlacement.canPlace ? 0x22d3ee : 0xfca5a5);
       placementRing.scale.setScalar(1);
       placementRing.position.set(x, 0.128, z);
       placementPlate.position.set(x, 0.126, z);
@@ -995,7 +1012,7 @@ export default function ThreeBattlefield({
 
       for (const tower of towers) {
         seen.add(tower.id);
-        const selected = tower.id === selectedTowerId;
+        const selected = tower.id === selectedTowerIdRef.current;
         let mesh = towerMeshes.get(tower.id);
         if (!mesh) {
           mesh = createTowerMesh(tower.type, selected);
@@ -1166,10 +1183,12 @@ export default function ThreeBattlefield({
 
     return () => {
       cancelAnimationFrame(raf);
+      renderer.setAnimationLoop(null);
       renderer.dispose();
+      renderer.forceContextLoss();
       host.innerHTML = '';
     };
-  }, [cellSize, getEngine, height, placementInfo, selectedTowerId, width]);
+  }, [cellSize, getEngine, height, width]);
 
   return <div ref={hostRef} className="absolute inset-0 pointer-events-none rounded overflow-hidden" />;
 }

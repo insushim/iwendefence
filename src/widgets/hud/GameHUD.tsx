@@ -33,15 +33,20 @@ function AnimatedNumber({
 
   useEffect(() => {
     if (value !== displayValue) {
-      setDelta(value - displayValue);
-      setFlash(true);
-      setDisplayValue(value);
+      const frame = window.requestAnimationFrame(() => {
+        setDelta(value - displayValue);
+        setFlash(true);
+        setDisplayValue(value);
+      });
       controls.start({
         scale: [1, 1.35, 0.95, 1.1, 1],
         transition: { duration: 0.4, ease: 'easeOut' },
       });
-      const timer = setTimeout(() => setFlash(false), 400);
-      return () => clearTimeout(timer);
+      const timer = window.setTimeout(() => setFlash(false), 400);
+      return () => {
+        window.cancelAnimationFrame(frame);
+        window.clearTimeout(timer);
+      };
     }
   }, [value, displayValue, controls]);
 
@@ -87,17 +92,25 @@ function HPBar({ hp, maxHp }: { hp: number; maxHp: number }) {
   // Damage flash effect
   useEffect(() => {
     if (hp < prevHpRef.current) {
-      setShowDamageFlash(true);
+      const frame = window.requestAnimationFrame(() => {
+        setShowDamageFlash(true);
+      });
       // Trailing bar effect -- the red "ghost" bar lags behind
-      const timer = setTimeout(() => {
+      const timer = window.setTimeout(() => {
         setTrailingPercent(hpPercent);
         setShowDamageFlash(false);
       }, 500);
       prevHpRef.current = hp;
-      return () => clearTimeout(timer);
+      return () => {
+        window.cancelAnimationFrame(frame);
+        window.clearTimeout(timer);
+      };
     } else {
-      setTrailingPercent(hpPercent);
+      const frame = window.requestAnimationFrame(() => {
+        setTrailingPercent(hpPercent);
+      });
       prevHpRef.current = hp;
+      return () => window.cancelAnimationFrame(frame);
     }
   }, [hp, hpPercent]);
 
@@ -239,17 +252,25 @@ function CurrencyCounter({
 
   useEffect(() => {
     if (value > prevValue) {
-      setGained(true);
+      const frame = window.requestAnimationFrame(() => {
+        setGained(true);
+        setPrevValue(value);
+      });
       iconControls.start({
         rotate: [0, -15, 15, -10, 10, 0],
         scale: [1, 1.3, 1],
         transition: { duration: 0.5 },
       });
-      const t = setTimeout(() => setGained(false), 500);
-      setPrevValue(value);
-      return () => clearTimeout(t);
+      const t = window.setTimeout(() => setGained(false), 500);
+      return () => {
+        window.cancelAnimationFrame(frame);
+        window.clearTimeout(t);
+      };
     }
-    setPrevValue(value);
+    const frame = window.requestAnimationFrame(() => {
+      setPrevValue(value);
+    });
+    return () => window.cancelAnimationFrame(frame);
   }, [value, prevValue, iconControls]);
 
   return (
@@ -300,7 +321,10 @@ function WaveBadge({ wave }: { wave: number }) {
         rotate: [0, -5, 5, 0],
         transition: { duration: 0.5, ease: 'easeOut' },
       });
-      setPrevWave(wave);
+      const frame = window.requestAnimationFrame(() => {
+        setPrevWave(wave);
+      });
+      return () => window.cancelAnimationFrame(frame);
     }
   }, [wave, prevWave, controls]);
 

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { useGameStore, useWordStore, usePlayerStore, useSettingsStore } from '@/shared/lib/store';
 import { allWords, getWordsByGrade } from '@/shared/constants/words';
-import type { Quiz, QuizType, QuizContext, WordGrade } from '@/shared/types/game';
+import type { Quiz, QuizType, QuizContext, WordStat } from '@/shared/types/game';
 
 export type { QuizContext };
 
@@ -92,8 +92,8 @@ function pickQuizType(difficulty: 1 | 2 | 3): QuizType {
 
 /** Quick quiz uses simpler types with shorter time */
 function generateQuickQuiz(
-  generateFn: (type: QuizType, wordStats: any[]) => Quiz | null,
-  wordStats: any[],
+  generateFn: (type: QuizType, wordStats: WordStat[]) => Quiz | null,
+  wordStats: WordStat[],
 ): Quiz | null {
   const types: QuizType[] = ['kr2en', 'en2kr'];
   const type = types[Math.floor(Math.random() * types.length)];

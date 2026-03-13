@@ -2,6 +2,7 @@
 
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import Link from 'next/link';
 import {
   Pause,
   Play,
@@ -115,7 +116,6 @@ export default function EndlessPage() {
   } = useGameStore();
 
   const highScores = usePlayerStore((s) => s.highScores);
-  const setHighScore = usePlayerStore((s) => s.setHighScore);
   const endlessHighScore = highScores['endless'] ?? 0;
 
   const [selectedTower, setSelectedTower] = useState<TowerType | null>(null);
@@ -123,12 +123,11 @@ export default function EndlessPage() {
   const [randomTowerNotif, setRandomTowerNotif] = useState<{ name: string; icon: string; isLegendary: boolean } | null>(null);
   const [showGameOver, setShowGameOver] = useState(false);
   const [showQuiz, setShowQuiz] = useState(false);
-  const [cellSize, setCellSize] = useState(60);
 
   const gameLoop = useGameLoop(canvasRef);
 
   // ── Quiz auto-trigger system ──
-  const { triggerQuiz } = useQuizTrigger({
+  useQuizTrigger({
     showQuiz,
     setShowQuiz,
     isTerminal: isGameOver || showGameOver,
@@ -156,7 +155,6 @@ export default function EndlessPage() {
 
       // Calculate cell size to fit the grid in available space
       const cs = Math.floor(Math.min(rect.width / cols, rect.height / rows));
-      setCellSize(cs);
 
       canvas.width = cols * cs;
       canvas.height = rows * cs;
@@ -247,8 +245,13 @@ export default function EndlessPage() {
       setShowGameOver(true);
       // Save high score
       if (score > endlessHighScore) {
-        // Store endless high score using special key
-        usePlayerStore.getState().highScores['endless'] = score;
+        usePlayerStore.setState((state) => ({
+          ...state,
+          highScores: {
+            ...state.highScores,
+            endless: score,
+          },
+        }));
       }
     }
   }, [isGameOver, score, endlessHighScore]);
@@ -426,7 +429,6 @@ export default function EndlessPage() {
       const cols = 16;
       const rows = 10;
       const cs = Math.floor(Math.min(rect.width / cols, rect.height / rows));
-      setCellSize(cs);
       canvas.width = cols * cs;
       canvas.height = rows * cs;
       canvas.style.width = `${cols * cs}px`;
@@ -551,14 +553,14 @@ export default function EndlessPage() {
       {/* Control Bar - Glassmorphism */}
       <div className="glass-dark border-t border-slate-600/30 safe-area-pb">
         <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-700/30">
-          <a href="/">
+          <Link href="/">
             <motion.div
               whileTap={{ scale: 0.9 }}
               className="w-9 h-9 rounded-xl glass flex items-center justify-center active:bg-slate-700/50 btn-glow border-slate-600/30"
             >
               <ArrowLeft className="w-4 h-4 text-slate-400" />
             </motion.div>
-          </a>
+          </Link>
 
           <motion.button
             whileTap={{ scale: 0.9 }}
@@ -851,11 +853,11 @@ export default function EndlessPage() {
           </div>
 
           <div className="flex gap-3 relative z-10">
-            <a href="/" className="flex-1">
+            <Link href="/" className="flex-1">
               <Button variant="ghost" fullWidth>
                 나가기
               </Button>
-            </a>
+            </Link>
             <Button
               variant="danger"
               fullWidth

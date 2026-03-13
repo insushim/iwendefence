@@ -1,16 +1,6 @@
 const CACHE_NAME = 'wordguard-v2';
-const STATIC_ASSETS = [
-  '/',
-  '/adventure/',
-  '/play/',
-  '/endless/',
-  '/wordbook/',
-  '/records/',
-  '/heroes/',
-  '/settings/',
-];
 
-self.addEventListener('install', (event) => {
+self.addEventListener('install', () => {
   self.skipWaiting();
 });
 

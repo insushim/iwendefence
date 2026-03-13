@@ -5,18 +5,13 @@
 import type {
   Tower,
   TowerType,
-  TowerGrade,
   Enemy,
   EnemyType,
   EnemyEffect,
   WorldPosition,
-  GridPosition,
   MapData,
   Wave,
-  WaveEnemy,
   GameSpeed,
-  TargetingMode,
-  Element,
   TreasureChest,
   ChestReward,
   TowerSynergy,
@@ -30,7 +25,6 @@ import {
   getCellCenter,
   isInRange,
   normalise,
-  getAngle,
 } from './pathfinding';
 
 // ── Internal Types ──────────────────────────────────────────
@@ -81,11 +75,6 @@ export interface WaveModifier {
 }
 
 type TowerElement = 'physical' | 'fire' | 'ice' | 'lightning' | 'poison' | 'magic' | 'holy' | 'earth';
-
-interface TowerCooldown {
-  towerId: string;
-  lastAttackTime: number;
-}
 
 interface WaveSpawnState {
   waveIndex: number;
@@ -1871,6 +1860,7 @@ export class GameEngine {
   // ── Kill Combo ─────────────────────────────────────────
 
   private updateKillCombo(dt: number): void {
+    void dt;
     if (this.killCombo > 0) {
       const timeSinceLastKill = (performance.now() / 1000) - this.lastKillTime;
       if (timeSinceLastKill > GameEngine.COMBO_TIMEOUT) {

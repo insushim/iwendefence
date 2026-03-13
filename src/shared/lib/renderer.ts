@@ -10,7 +10,6 @@ import type {
   Enemy,
   EnemyType,
   MapData,
-  GridPosition,
   WorldPosition,
   SynergyBonus,
 } from '../types/game';
@@ -33,8 +32,8 @@ import type {
   WaveModifier,
 } from './gameEngine';
 
-import { getCellCenter, getDistanceBetweenPoints } from './pathfinding';
-import { particleSystem, screenEffects } from './particleSystem';
+import { getCellCenter } from './pathfinding';
+import { particleSystem } from './particleSystem';
 
 // ── 3D Constants ────────────────────────────────────────────
 
@@ -503,9 +502,7 @@ function drawKillCombo(
   cw: number,
   ch: number
 ): void {
-  const t = getTime();
-  const scale = 1 + Math.sin(t * 6) * 0.05;
-
+  void ch;
   ctx.save();
   ctx.textAlign = 'right';
   ctx.textBaseline = 'top';
@@ -556,6 +553,7 @@ function drawSynergyIndicators(
   synergies: Map<string, SynergyBonus>,
   canvasWidth: number
 ): void {
+  void canvasWidth;
   ctx.save();
   ctx.textAlign = 'left';
   ctx.font = 'bold 9px sans-serif';
@@ -3300,7 +3298,6 @@ export function drawEnemy(
   if (enemy.pathIndex < 100) { // has path data
     const dirLen = size * 0.6;
     // Use pathProgress direction hint: just draw a subtle arrow below
-    const bobAngle = Math.sin(t * 4 + enemy.pathIndex) * 0.1;
     ctx.strokeStyle = 'rgba(255,255,255,0.15)';
     ctx.lineWidth = 1;
     ctx.beginPath();
@@ -3323,6 +3320,7 @@ function drawStatusEffects(
   y: number,
   enemySize: number
 ): void {
+  void enemySize;
   if (enemy.effects.length === 0) return;
 
   const iconSize = 6;

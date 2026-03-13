@@ -17,7 +17,6 @@ import type {
   WordStat,
   MasteryLevel,
   WordData,
-  WordActions,
   WordGrade,
   QuizType,
   SettingsState,

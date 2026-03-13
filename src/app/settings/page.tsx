@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
+import Link from 'next/link';
 import {
   ArrowLeft,
   Volume2,
@@ -14,7 +15,7 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 
-import { useSettingsStore, usePlayerStore } from '@/shared/lib/store';
+import { useSettingsStore } from '@/shared/lib/store';
 import type { WordGrade } from '@/shared/types/game';
 import Button from '@/shared/ui/Button';
 import Modal from '@/shared/ui/Modal';
@@ -81,7 +82,7 @@ export default function SettingsPage() {
       {/* Header */}
       <div className="sticky top-0 z-20 bg-[#0F172A]/80 backdrop-blur-xl border-b border-slate-800/50">
         <div className="flex items-center gap-3 px-4 py-3 max-w-lg mx-auto">
-          <a href="/">
+          <Link href="/">
             <motion.div
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
@@ -89,7 +90,7 @@ export default function SettingsPage() {
             >
               <ArrowLeft className="w-5 h-5 text-slate-400" />
             </motion.div>
-          </a>
+          </Link>
           <h1 className="text-lg font-bold text-white">설정</h1>
         </div>
       </div>

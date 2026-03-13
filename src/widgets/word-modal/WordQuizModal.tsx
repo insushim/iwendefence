@@ -1,12 +1,12 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Timer, Flame, Sparkles, X, Check, Heart, Zap, Coins, Shield } from 'lucide-react';
+import { Timer, Flame, Sparkles, X, Check, Heart, Zap, Coins } from 'lucide-react';
 import Modal from '@/shared/ui/Modal';
 import { useWordStore, usePlayerStore, useGameStore } from '@/shared/lib/store';
 import { allWords } from '@/shared/constants/words';
-import type { Quiz, QuizReward, QuizType, WordData } from '@/shared/types/game';
+import type { Quiz, QuizType } from '@/shared/types/game';
 
 // ── Reward tiers based on combo ──
 function getComboReward(quizCombo: number): {
@@ -39,9 +39,10 @@ function speakWord(word: string, lang: 'en' | 'ko' = 'en') {
 interface WordQuizModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onResolved?: (correct: boolean) => void;
 }
 
-export default function WordQuizModal({ isOpen, onClose }: WordQuizModalProps) {
+export default function WordQuizModal({ isOpen, onClose, onResolved }: WordQuizModalProps) {
   // ── Store state ──
   const wordStats = usePlayerStore((s) => s.wordStats);
   const updateWordStat = usePlayerStore((s) => s.updateWordStat);
@@ -170,13 +171,13 @@ export default function WordQuizModal({ isOpen, onClose }: WordQuizModalProps) {
           }
         }
 
-        // Add score
-        const comboMultiplier = 1 + newCombo * 0.1;
         useGameStore.getState().setCombo(useGameStore.getState().combo);
       } else {
         // Reset quiz combo on wrong answer
         useGameStore.setState({ quizCombo: 0 });
       }
+
+      onResolved?.(correct);
 
       // Close immediately (minimal delay for visual flash)
       closingRef.current = true;
@@ -185,7 +186,7 @@ export default function WordQuizModal({ isOpen, onClose }: WordQuizModalProps) {
       }, 250);
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [quiz, startTime, updateWordStat]
+    [onResolved, quiz, startTime, updateWordStat]
   );
 
   // ── Handle option click ──

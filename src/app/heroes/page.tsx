@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
+import Link from 'next/link';
 import {
   ArrowLeft,
   Lock,
@@ -190,7 +191,7 @@ export default function HeroesPage() {
       {/* Header */}
       <div className="sticky top-0 z-20 bg-[#0F172A]/80 backdrop-blur-xl border-b border-slate-800/50">
         <div className="flex items-center gap-3 px-4 py-3 max-w-lg mx-auto">
-          <a href="/">
+          <Link href="/">
             <motion.div
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
@@ -198,7 +199,7 @@ export default function HeroesPage() {
             >
               <ArrowLeft className="w-5 h-5 text-slate-400" />
             </motion.div>
-          </a>
+          </Link>
           <h1 className="text-lg font-bold text-white flex items-center gap-2">
             <Shield className="w-5 h-5 text-pink-400" />
             히어로

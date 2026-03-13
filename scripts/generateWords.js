@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
 // Word data generator script
 // Generates comprehensive word data for grades 3-6
 const fs = require('fs');

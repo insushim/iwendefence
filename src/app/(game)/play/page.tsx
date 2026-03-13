@@ -54,6 +54,8 @@ interface RunBonuses {
   goldMultiplier: number;
 }
 
+type QuizRewardContext = 'revive' | 'wave_bonus' | null;
+
 const WAVE_UPGRADE_POOL: RoguelikeUpgrade[] = [
   {
     id: 'ballistics_calibration',
@@ -220,6 +222,7 @@ function PlayPageContent() {
   const [showGameOver, setShowGameOver] = useState(false);
   const [showStageClear, setShowStageClear] = useState(false);
   const [showQuiz, setShowQuiz] = useState(false);
+  const [quizRewardContext, setQuizRewardContext] = useState<QuizRewardContext>(null);
   const [cellSize, setCellSize] = useState(60);
   const [totalWaves, setTotalWaves] = useState(0);
   const [placementPreview, setPlacementPreview] = useState<PlacementInfo | null>(null);
@@ -229,7 +232,6 @@ function PlayPageContent() {
   const [showReviveQuiz, setShowReviveQuiz] = useState(false);
   const [reviveUsed, setReviveUsed] = useState(false);
   const [waveBonusGold, setWaveBonusGold] = useState(0);
-  const [quizContext, setQuizContext] = useState<string | null>(null);
   const [showBossWarning, setShowBossWarning] = useState(false);
   const [bossWarningType, setBossWarningType] = useState<string>('');
   const [showUpgradePanel, setShowUpgradePanel] = useState(false);
@@ -239,7 +241,11 @@ function PlayPageContent() {
   const [selectedPlacedTowerId, setSelectedPlacedTowerId] = useState<string | null>(null);
   const [heroId] = useState(() => (heroParam in HERO_DEFINITIONS ? heroParam : DEFAULT_HERO_ID));
   const [heroCooldowns, setHeroCooldowns] = useState({ active: 0, ultimate: 0 });
+  const [heroCastEffect, setHeroCastEffect] = useState<null | { mode: 'active' | 'ultimate'; color: string; label: string }>(null);
+  const [waveStartCue, setWaveStartCue] = useState<null | { wave: number }>(null);
   const rewardedWaveRef = useRef<Set<number>>(new Set());
+  const heroCastTimeoutRef = useRef<number | null>(null);
+  const waveCueTimeoutRef = useRef<number | null>(null);
 
   const gameLoop = useGameLoop(canvasRef, {
     onBossWarning: (bossType: EnemyType) => {
@@ -251,11 +257,35 @@ function PlayPageContent() {
   });
 
   // ── Quiz auto-trigger system ──
-  const { triggerQuiz } = useQuizTrigger({
+  useQuizTrigger({
     showQuiz,
     setShowQuiz,
     isTerminal: isGameOver || showGameOver || showStageClear,
   });
+
+  const currentHero = HERO_DEFINITIONS[heroId] ?? HERO_DEFINITIONS[DEFAULT_HERO_ID];
+
+  const flashHeroCast = useCallback((mode: 'active' | 'ultimate') => {
+    if (heroCastTimeoutRef.current) window.clearTimeout(heroCastTimeoutRef.current);
+    setHeroCastEffect({
+      mode,
+      color: currentHero.color,
+      label: mode === 'active' ? currentHero.activeSkill.name : currentHero.ultimate.name,
+    });
+    heroCastTimeoutRef.current = window.setTimeout(() => {
+      setHeroCastEffect(null);
+      heroCastTimeoutRef.current = null;
+    }, 950);
+  }, [currentHero.activeSkill.name, currentHero.color, currentHero.ultimate.name]);
+
+  const flashWaveStartCue = useCallback((waveNumber: number) => {
+    if (waveCueTimeoutRef.current) window.clearTimeout(waveCueTimeoutRef.current);
+    setWaveStartCue({ wave: waveNumber });
+    waveCueTimeoutRef.current = window.setTimeout(() => {
+      setWaveStartCue(null);
+      waveCueTimeoutRef.current = null;
+    }, 1400);
+  }, []);
 
   // Load stage on mount
   useEffect(() => {
@@ -306,6 +336,7 @@ function PlayPageContent() {
     // Auto-start first wave after 3 seconds
     waveTimerRef.current = setTimeout(() => {
       gameLoop.startNextWave();
+      flashWaveStartCue(1);
     }, 3000);
 
     // Handle resize
@@ -326,9 +357,11 @@ function PlayPageContent() {
     return () => {
       resizeObserver.disconnect();
       if (waveTimerRef.current) clearTimeout(waveTimerRef.current);
+      if (heroCastTimeoutRef.current) window.clearTimeout(heroCastTimeoutRef.current);
+      if (waveCueTimeoutRef.current) window.clearTimeout(waveCueTimeoutRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [flashWaveStartCue]);
 
   // Sync towers to engine
   useEffect(() => {
@@ -378,13 +411,14 @@ function PlayPageContent() {
         if (waveTimerRef.current) clearTimeout(waveTimerRef.current);
         waveTimerRef.current = setTimeout(() => {
           gameLoop.startNextWave();
+          flashWaveStartCue(clearedWave + 1);
         }, 5000);
         clearInterval(checkInterval);
       }
     }, 500);
 
     return () => clearInterval(checkInterval);
-  }, [wave, gameLoop, isGameOver, score, setHighScore, showQuiz, showUpgradePanel, showWaveBonus, stageId, unlockStage, worldId]);
+  }, [wave, gameLoop, isGameOver, score, setHighScore, showQuiz, showUpgradePanel, showWaveBonus, stageId, unlockStage, worldId, flashWaveStartCue]);
 
   // Game over handling - offer revive quiz first (like "watch ad to continue")
   useEffect(() => {
@@ -416,7 +450,7 @@ function PlayPageContent() {
   // Handle revive quiz result
   const handleReviveQuiz = useCallback(() => {
     setShowReviveQuiz(false);
-    setQuizContext('revive');
+    setQuizRewardContext('revive');
     setShowQuiz(true);
   }, []);
 
@@ -428,8 +462,38 @@ function PlayPageContent() {
   // Handle wave bonus quiz
   const handleWaveBonusQuiz = useCallback(() => {
     setShowWaveBonus(false);
-    setQuizContext('wave_bonus');
+    setQuizRewardContext('wave_bonus');
     setShowQuiz(true);
+  }, []);
+
+  const handleQuizResolved = useCallback((correct: boolean) => {
+    if (quizRewardContext === 'revive') {
+      setReviveUsed(true);
+    }
+
+    if (!correct) {
+      if (quizRewardContext === 'revive') {
+        setShowGameOver(true);
+      }
+      setQuizRewardContext(null);
+      return;
+    }
+
+    if (quizRewardContext === 'revive') {
+      const revivedHp = Math.max(1, Math.ceil(maxHp * 0.5));
+      useGameStore.setState({ hp: revivedHp, isGameOver: false });
+      setShowGameOver(false);
+      gameLoop.getEngine()?.setInvincible(3);
+    } else if (quizRewardContext === 'wave_bonus') {
+      addGold(waveBonusGold);
+    }
+
+    setQuizRewardContext(null);
+  }, [addGold, gameLoop, maxHp, quizRewardContext, waveBonusGold]);
+
+  const handleQuizClose = useCallback(() => {
+    setShowQuiz(false);
+    setQuizRewardContext(null);
   }, []);
 
   const handleUpgradeSelect = useCallback((upgrade: RoguelikeUpgrade) => {
@@ -494,7 +558,6 @@ function PlayPageContent() {
     return () => window.clearInterval(timer);
   }, []);
 
-  const currentHero = HERO_DEFINITIONS[heroId] ?? HERO_DEFINITIONS[DEFAULT_HERO_ID];
   const selectedPlacedTower = towers.find((tower) => tower.id === selectedPlacedTowerId) ?? null;
   const selectedPlacedTowerDef = selectedPlacedTower ? TOWER_DEFINITIONS[selectedPlacedTower.type] : null;
   const bossAccent = getBossAccent(bossWarningType);
@@ -513,6 +576,7 @@ function PlayPageContent() {
       case 'aria':
         engine.damageTopEnemies(10, 140);
         setHeroCooldowns((prev) => ({ ...prev, active: currentHero.activeSkill.cooldown }));
+        flashHeroCast('active');
         break;
       case 'luna': {
         const enemies = engine.getEnemies();
@@ -520,28 +584,33 @@ function PlayPageContent() {
         if (!anchor) return;
         engine.damageEnemiesInRadius(anchor.position, cellSize * 2.2, 180);
         setHeroCooldowns((prev) => ({ ...prev, active: currentHero.activeSkill.cooldown }));
+        flashHeroCast('active');
         break;
       }
       case 'gaia':
         engine.setInvincible(5);
         setHeroCooldowns((prev) => ({ ...prev, active: currentHero.activeSkill.cooldown }));
+        flashHeroCast('active');
         break;
       case 'kai':
         engine.boostHeroPower(1.35, 1.25, 8);
         setHeroCooldowns((prev) => ({ ...prev, active: currentHero.activeSkill.cooldown }));
+        flashHeroCast('active');
         break;
       case 'frost':
         engine.slowAllEnemies(0.6, 3);
         setHeroCooldowns((prev) => ({ ...prev, active: currentHero.activeSkill.cooldown }));
+        flashHeroCast('active');
         break;
       case 'volt':
         engine.stunArmoredEnemies(2, 0.08);
         setHeroCooldowns((prev) => ({ ...prev, active: currentHero.activeSkill.cooldown }));
+        flashHeroCast('active');
         break;
       default:
         break;
     }
-  }, [cellSize, currentHero.activeSkill.cooldown, gameLoop, heroCooldowns.active, heroId]);
+  }, [cellSize, currentHero.activeSkill.cooldown, gameLoop, heroCooldowns.active, heroId, flashHeroCast]);
 
   const castHeroUltimate = useCallback(() => {
     const engine = gameLoop.getEngine();
@@ -575,7 +644,8 @@ function PlayPageContent() {
     }
 
     setHeroCooldowns((prev) => ({ ...prev, ultimate: currentHero.ultimate.cooldown }));
-  }, [currentHero.ultimate.cooldown, gameLoop, heroCooldowns.ultimate, heroId, maxHp]);
+    flashHeroCast('ultimate');
+  }, [currentHero.ultimate.cooldown, gameLoop, heroCooldowns.ultimate, heroId, maxHp, flashHeroCast]);
 
   const handleTowerBranchUpgrade = useCallback((path: 0 | 1 | 2) => {
     if (!selectedPlacedTower) return;
@@ -869,8 +939,13 @@ function PlayPageContent() {
   }, [selectedTower, isRandomTower, gameLoop]);
 
   const handleStartWave = useCallback(() => {
+    if (waveTimerRef.current) {
+      clearTimeout(waveTimerRef.current);
+      waveTimerRef.current = null;
+    }
     gameLoop.startNextWave();
-  }, [gameLoop]);
+    flashWaveStartCue(wave + 1);
+  }, [flashWaveStartCue, gameLoop, wave]);
 
   const handleManualQuiz = useCallback(() => {
     if (!isPaused) togglePause();
@@ -1321,6 +1396,10 @@ function PlayPageContent() {
                   >
                     {attackBadge}
                   </span>
+                  <div className="flex items-center gap-1 text-[9px] font-semibold text-slate-500 tabular-nums">
+                    <span className="rounded-full bg-slate-900/70 px-1.5 py-px">D {Math.round(tower.baseStats.damage)}</span>
+                    <span className="rounded-full bg-slate-900/70 px-1.5 py-px">R {tower.baseStats.range.toFixed(1)}</span>
+                  </div>
                   <span
                     className={`text-[10px] font-bold tabular-nums px-1.5 py-px rounded-full ${
                       isSelected
@@ -1414,7 +1493,8 @@ function PlayPageContent() {
       {/* Word Quiz Modal */}
       <WordQuizModal
         isOpen={showQuiz}
-        onClose={() => setShowQuiz(false)}
+        onClose={handleQuizClose}
+        onResolved={handleQuizResolved}
       />
 
       <UpgradePanel
@@ -1665,6 +1745,81 @@ function PlayPageContent() {
               </motion.div>
               <div className="absolute inset-0 btn-shine-overlay opacity-40 pointer-events-none" />
             </motion.button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {waveStartCue && (
+          <motion.div
+            initial={{ opacity: 0, y: 36, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -28, scale: 1.05 }}
+            transition={{ type: 'spring', stiffness: 220, damping: 22 }}
+            className="absolute left-1/2 top-28 z-25 pointer-events-none"
+            style={{ transform: 'translateX(-50%)' }}
+          >
+            <div
+              className="rounded-[28px] border px-7 py-4 text-center backdrop-blur-xl"
+              style={{
+                background: 'linear-gradient(180deg, rgba(8,15,35,0.92), rgba(15,23,42,0.78))',
+                borderColor: 'rgba(34,211,238,0.28)',
+                boxShadow: '0 0 28px rgba(34,211,238,0.16)',
+              }}
+            >
+              <div className="mb-1 text-[10px] font-black uppercase tracking-[0.32em] text-cyan-300">Wave Engage</div>
+              <div className="text-3xl font-black tracking-[0.24em] text-white">WAVE {waveStartCue.wave}</div>
+              <div className="mt-2 flex items-center justify-center gap-2">
+                {[0, 1, 2].map((idx) => (
+                  <motion.div
+                    key={`wave-cue-${idx}`}
+                    animate={{ opacity: [0.25, 0.95, 0.25], scaleX: [0.88, 1.08, 0.88] }}
+                    transition={{ repeat: Infinity, duration: 0.9, delay: idx * 0.12 }}
+                    className="h-1.5 w-12 rounded-full"
+                    style={{ background: 'linear-gradient(90deg, transparent, rgba(34,211,238,0.95), transparent)' }}
+                  />
+                ))}
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {heroCastEffect && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 z-25 pointer-events-none flex items-center justify-center"
+          >
+            <motion.div
+              animate={{ scale: [0.9, 1.12, 0.98], opacity: [0.16, 0.32, 0.12] }}
+              transition={{ duration: 0.9, ease: 'easeOut' }}
+              className="absolute h-72 w-72 rounded-full blur-3xl"
+              style={{ background: `radial-gradient(circle, ${heroCastEffect.color}66 0%, transparent 72%)` }}
+            />
+            <motion.div
+              initial={{ scale: 0.84, opacity: 0, rotate: -4 }}
+              animate={{ scale: 1, opacity: 1, rotate: 0 }}
+              exit={{ scale: 1.08, opacity: 0 }}
+              transition={{ type: 'spring', stiffness: 240, damping: 20 }}
+              className="rounded-[30px] border px-8 py-5 text-center backdrop-blur-xl"
+              style={{
+                borderColor: `${heroCastEffect.color}66`,
+                background: 'linear-gradient(180deg, rgba(8,15,35,0.9), rgba(15,23,42,0.7))',
+                boxShadow: `0 0 36px ${heroCastEffect.color}33`,
+              }}
+            >
+              <div
+                className="mb-1 text-[10px] font-black uppercase tracking-[0.34em]"
+                style={{ color: heroCastEffect.color }}
+              >
+                {heroCastEffect.mode === 'active' ? 'Hero Skill' : 'Hero Burst'}
+              </div>
+              <div className="text-3xl font-black uppercase tracking-[0.22em] text-white">{heroCastEffect.label}</div>
+              <div className="mt-2 text-xs uppercase tracking-[0.28em] text-white/50">{currentHero.nameKr}</div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>

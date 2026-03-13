@@ -1389,6 +1389,7 @@ export const PRESETS = {
 
   // ---------- Rain ----------
   rain(canvasWidth: number, canvasHeight: number): EmitterConfig {
+    void canvasHeight;
     return baseConfig({
       type: 'ambient',
       shape: 'line',
@@ -1417,6 +1418,7 @@ export const PRESETS = {
 
   // ---------- Snow ----------
   snow(canvasWidth: number, canvasHeight: number): EmitterConfig {
+    void canvasHeight;
     return baseConfig({
       type: 'ambient',
       shape: 'line',

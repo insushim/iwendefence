@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { Sparkles, Shield, Coins, Sword, Zap, BookOpen } from 'lucide-react';
 import Modal from '@/shared/ui/Modal';
 import type { RoguelikeUpgrade, UpgradeCategory } from '@/shared/types/game';

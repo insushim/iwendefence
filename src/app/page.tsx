@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Gamepad2,
@@ -99,6 +99,11 @@ const difficultyOptions = [
 
 const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
 
+function seededUnit(seed: number): number {
+  const value = Math.sin(seed * 12.9898) * 43758.5453;
+  return value - Math.floor(value);
+}
+
 interface FloatingLetter {
   id: number;
   char: string;
@@ -111,18 +116,16 @@ interface FloatingLetter {
 }
 
 function useFloatingLetters(count: number): FloatingLetter[] {
-  return useMemo(() => {
-    return Array.from({ length: count }, (_, i) => ({
-      id: i,
-      char: LETTERS[Math.floor(Math.random() * LETTERS.length)],
-      x: Math.random() * 100,
-      y: Math.random() * 100,
-      size: 12 + Math.random() * 20,
-      duration: 12 + Math.random() * 18,
-      delay: Math.random() * -20,
-      opacity: 0.03 + Math.random() * 0.06,
-    }));
-  }, [count]);
+  return Array.from({ length: count }, (_, i) => ({
+    id: i,
+    char: LETTERS[Math.floor(seededUnit(i + 1) * LETTERS.length)],
+    x: seededUnit(i + 11) * 100,
+    y: seededUnit(i + 21) * 100,
+    size: 12 + seededUnit(i + 31) * 20,
+    duration: 12 + seededUnit(i + 41) * 18,
+    delay: seededUnit(i + 51) * -20,
+    opacity: 0.03 + seededUnit(i + 61) * 0.06,
+  }));
 }
 
 /* ────────────────── Sparkle Particles ────────────────── */
@@ -137,16 +140,14 @@ interface Sparkle {
 }
 
 function useSparkles(count: number): Sparkle[] {
-  return useMemo(() => {
-    return Array.from({ length: count }, (_, i) => ({
-      id: i,
-      x: 20 + Math.random() * 60,
-      y: 10 + Math.random() * 30,
-      size: 2 + Math.random() * 3,
-      delay: Math.random() * 3,
-      duration: 1.5 + Math.random() * 2,
-    }));
-  }, [count]);
+  return Array.from({ length: count }, (_, i) => ({
+    id: i,
+    x: 20 + seededUnit(i + 101) * 60,
+    y: 10 + seededUnit(i + 111) * 30,
+    size: 2 + seededUnit(i + 121) * 3,
+    delay: seededUnit(i + 131) * 3,
+    duration: 1.5 + seededUnit(i + 141) * 2,
+  }));
 }
 
 /* ────────────────── Geometric Shapes ────────────────── */
@@ -163,19 +164,17 @@ interface GeoShape {
 }
 
 function useGeoShapes(count: number): GeoShape[] {
-  return useMemo(() => {
-    const types: GeoShape['type'][] = ['diamond', 'hexagon', 'triangle'];
-    return Array.from({ length: count }, (_, i) => ({
-      id: i,
-      type: types[i % 3],
-      x: Math.random() * 100,
-      y: Math.random() * 100,
-      size: 20 + Math.random() * 40,
-      rotation: Math.random() * 360,
-      duration: 15 + Math.random() * 20,
-      delay: Math.random() * -10,
-    }));
-  }, [count]);
+  const types: GeoShape['type'][] = ['diamond', 'hexagon', 'triangle'];
+  return Array.from({ length: count }, (_, i) => ({
+    id: i,
+    type: types[i % 3],
+    x: seededUnit(i + 201) * 100,
+    y: seededUnit(i + 211) * 100,
+    size: 20 + seededUnit(i + 221) * 40,
+    rotation: seededUnit(i + 231) * 360,
+    duration: 15 + seededUnit(i + 241) * 20,
+    delay: seededUnit(i + 251) * -10,
+  }));
 }
 
 function GeoShapeSVG({ type, size }: { type: GeoShape['type']; size: number }) {
@@ -271,11 +270,6 @@ function AnimatedBorderCard({
 export default function HomePage() {
   const { grade, difficulty, setGrade, setDifficulty } = useSettingsStore();
   const [showSettings, setShowSettings] = useState(false);
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   const floatingLetters = useFloatingLetters(18);
   const sparkles = useSparkles(12);
@@ -333,8 +327,7 @@ export default function HomePage() {
         />
 
         {/* Floating geometric shapes */}
-        {mounted &&
-          geoShapes.map((shape) => (
+        {geoShapes.map((shape) => (
             <motion.div
               key={`geo-${shape.id}`}
               className="absolute text-white/[0.03] pointer-events-none"
@@ -353,8 +346,7 @@ export default function HomePage() {
           ))}
 
         {/* Floating letter runes */}
-        {mounted &&
-          floatingLetters.map((letter) => (
+        {floatingLetters.map((letter) => (
             <motion.span
               key={`letter-${letter.id}`}
               className="absolute pointer-events-none select-none font-display text-white"
@@ -391,8 +383,7 @@ export default function HomePage() {
           className="text-center mb-8 relative"
         >
           {/* Sparkle particles around logo */}
-          {mounted &&
-            sparkles.map((s) => (
+          {sparkles.map((s) => (
               <motion.div
                 key={`sparkle-${s.id}`}
                 className="absolute rounded-full bg-white pointer-events-none"

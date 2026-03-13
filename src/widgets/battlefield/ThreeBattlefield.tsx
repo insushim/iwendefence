@@ -683,6 +683,52 @@ function createProjectileMesh(color: number): THREE.Group {
   return group;
 }
 
+function applyTowerIdleMotion(mesh: THREE.Group, tower: Tower, frame: number): void {
+  const t = frame * 0.04 + tower.position.col * 0.7 + tower.position.row * 0.35;
+  switch (tower.type) {
+    case 'MAGIC':
+    case 'DIVINE':
+    case 'CHRONO':
+    case 'WORD':
+      mesh.position.y += Math.sin(t) * 0.04;
+      break;
+    case 'LIGHTNING': {
+      const coil = mesh.children.find((child) => child instanceof THREE.Mesh && child.geometry instanceof THREE.TorusKnotGeometry);
+      if (coil) coil.rotation.y += 0.05;
+      break;
+    }
+    case 'HEALER': {
+      const halo = mesh.children.find((child) => child instanceof THREE.Mesh && child.geometry instanceof THREE.TorusGeometry);
+      if (halo) {
+        halo.rotation.z += 0.03;
+        halo.position.y = 1.02 + Math.sin(t * 1.4) * 0.05;
+      }
+      break;
+    }
+    case 'FLAME':
+    case 'PHOENIX': {
+      const flame = mesh.children.find((child) => child instanceof THREE.Mesh && child.geometry instanceof THREE.ConeGeometry);
+      if (flame) {
+        flame.scale.y = 0.92 + (Math.sin(t * 2.2) + 1) * 0.12;
+        flame.rotation.y += 0.03;
+      }
+      break;
+    }
+    case 'GOLDMINE': {
+      const nugget = mesh.children.find((child) => child instanceof THREE.Mesh && child.geometry instanceof THREE.IcosahedronGeometry);
+      if (nugget) nugget.rotation.y += 0.035;
+      break;
+    }
+    case 'SNIPER': {
+      const rifle = mesh.children.find((child) => child instanceof THREE.Mesh && child.geometry instanceof THREE.CylinderGeometry);
+      if (rifle) rifle.rotation.y = Math.sin(t * 0.8) * 0.08;
+      break;
+    }
+    default:
+      break;
+  }
+}
+
 function spawnBurst(target: THREE.Object3D, parent: THREE.Group, effects: BurstEffect[], color: number, count: number, upward = 1.2): void {
   const burst = new THREE.Group();
   for (let i = 0; i < count; i++) {
@@ -850,8 +896,31 @@ export default function ThreeBattlefield({
     rangeRing.visible = false;
     overlayGroup.add(rangeRing);
 
+    const selectedRangeRing = new THREE.Mesh(
+      new THREE.RingGeometry(0.86, 0.92, 96),
+      basicGlow(0xffffff, 0.18)
+    );
+    selectedRangeRing.rotation.x = -Math.PI / 2;
+    selectedRangeRing.position.y = 0.12;
+    selectedRangeRing.visible = false;
+    overlayGroup.add(selectedRangeRing);
+
     let frame = 0;
     let raf = 0;
+
+    const syncSelectedTowerRing = (towers: Tower[]) => {
+      const selectedTower = towers.find((tower) => tower.id === selectedTowerId);
+      if (!selectedTower) {
+        selectedRangeRing.visible = false;
+        return;
+      }
+
+      const rows = getEngine()?.getMapData()?.grid.length ?? 10;
+      const scale = Math.max(1.1, selectedTower.stats.range / 2.9);
+      selectedRangeRing.position.set(selectedTower.position.col + 0.5, 0.12, rows - selectedTower.position.row - 0.5);
+      selectedRangeRing.scale.set(scale, scale, scale);
+      selectedRangeRing.visible = true;
+    };
 
     const syncMap = (engine: GameEngine) => {
       const map = engine.getMapData();
@@ -940,6 +1009,7 @@ export default function ThreeBattlefield({
         mesh.position.set(tower.position.col + 0.5, (1 - appear) * 0.5, rows - tower.position.row - 0.5);
         mesh.rotation.y += 0.01 + tower.grade * 0.002;
         mesh.scale.setScalar((0.72 + appear * 0.28) * (1 + tower.grade * 0.06));
+        applyTowerIdleMotion(mesh, tower, frame);
 
         const hasRing = mesh.children.some((child) => child.userData.selectionRing);
         if (selected && !hasRing) addSelectionRing(mesh, TOWER_COLORS[tower.type] ?? 0xffffff);
@@ -979,6 +1049,24 @@ export default function ThreeBattlefield({
         updateEnemyMesh(mesh, enemy, frame * 0.016);
         mesh.scale.setScalar((BOSS_TYPES.has(enemy.type) ? 1.55 : 1) * (0.78 + appear * 0.22));
         mesh.userData.type = enemy.type;
+
+        if (BOSS_TYPES.has(enemy.type)) {
+          const enemyColor = ENEMY_COLORS[enemy.type] ?? 0xef4444;
+          let aura = mesh.children.find((child) => child.userData.bossAura) as THREE.Mesh | undefined;
+          if (!aura) {
+            aura = new THREE.Mesh(new THREE.RingGeometry(0.56, 0.76, 48), basicGlow(enemyColor, 0.2));
+            aura.userData.bossAura = true;
+            aura.rotation.x = -Math.PI / 2;
+            aura.position.y = 0.04;
+            mesh.add(aura);
+          }
+
+          const pulse = 1 + Math.sin(frame * 0.09) * 0.12;
+          aura.scale.setScalar(pulse);
+          aura.rotation.z -= 0.025;
+          (aura.material as THREE.MeshBasicMaterial).opacity = enemy.bossAbilityCooldown && enemy.bossAbilityCooldown < 3 ? 0.42 : 0.22;
+          (aura.material as THREE.MeshBasicMaterial).color.setHex(enemy.bossAbilityCooldown && enemy.bossAbilityCooldown < 3 ? 0xef4444 : enemyColor);
+        }
       }
 
       for (const [id, mesh] of enemyMeshes) {
@@ -1054,7 +1142,9 @@ export default function ThreeBattlefield({
       const engine = getEngine();
       if (engine) {
         syncMap(engine);
-        syncTowers(engine.getTowers());
+        const towers = engine.getTowers();
+        syncTowers(towers);
+        syncSelectedTowerRing(towers);
         syncEnemies(engine.getEnemies());
         syncProjectiles(engine);
         syncPlacement();
@@ -1065,6 +1155,7 @@ export default function ThreeBattlefield({
         }
         placementRing.rotation.z += 0.01;
         rangeRing.rotation.z -= 0.004;
+        selectedRangeRing.rotation.z += 0.003;
       }
 
       renderer.render(scene, camera);

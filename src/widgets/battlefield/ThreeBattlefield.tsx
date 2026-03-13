@@ -16,6 +16,14 @@ interface ThreeBattlefieldProps {
   placementInfo: PlacementInfo | null;
 }
 
+interface BurstEffect {
+  mesh: THREE.Group;
+  velocity: THREE.Vector3;
+  life: number;
+  maxLife: number;
+  spin: number;
+}
+
 const TOWER_COLORS: Record<string, number> = {
   ARCHER: 0x50c878,
   MAGIC: 0xa855f7,
@@ -69,6 +77,11 @@ const ENEMY_COLORS: Record<string, number> = {
   WORD_DESTROYER: 0xe879f9,
 };
 
+const BOSS_TYPES = new Set(['DRAGON', 'LICH_KING', 'DEMON_LORD', 'HYDRA', 'WORD_DESTROYER']);
+const FLYING_TYPES = new Set(['BAT', 'HARPY', 'DRAGON_WHELP', 'GARGOYLE', 'PHOENIX_CHICK', 'WYVERN']);
+const ARMORED_TYPES = new Set(['KNIGHT', 'GOLEM', 'SHIELD_BEARER', 'IRON_TURTLE', 'ARMORED_ORC']);
+const CASTER_TYPES = new Set(['WIZARD', 'DARK_MAGE', 'SPIRIT', 'ENCHANTRESS', 'PHANTOM']);
+
 function worldPositionFromCanvas(x: number, y: number, cellSize: number, rows: number): THREE.Vector3 {
   return new THREE.Vector3(x / cellSize, 0, rows - y / cellSize);
 }
@@ -83,6 +96,15 @@ function standardMaterial(color: number, emissive = 0x000000, emissiveIntensity 
   });
 }
 
+function basicGlow(color: number, opacity: number): THREE.MeshBasicMaterial {
+  return new THREE.MeshBasicMaterial({
+    color,
+    transparent: true,
+    opacity,
+    side: THREE.DoubleSide,
+  });
+}
+
 function addSelectionRing(group: THREE.Group, color: number): void {
   const ring = new THREE.Mesh(
     new THREE.TorusGeometry(0.46, 0.03, 8, 40),
@@ -94,14 +116,37 @@ function addSelectionRing(group: THREE.Group, color: number): void {
   group.add(ring);
 }
 
-function createArcherTower(color: number): THREE.Group {
+function addTowerShadow(group: THREE.Group): void {
+  const shadow = new THREE.Mesh(
+    new THREE.CircleGeometry(0.42, 24),
+    new THREE.MeshBasicMaterial({ color: 0x020617, transparent: true, opacity: 0.3 })
+  );
+  shadow.rotation.x = -Math.PI / 2;
+  shadow.position.y = 0.01;
+  shadow.userData.softShadow = true;
+  group.add(shadow);
+}
+
+function createPedestal(color: number): THREE.Group {
   const group = new THREE.Group();
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.44, 0.16, 12), standardMaterial(0x111827));
+  base.position.y = 0.08;
+  group.add(base);
+
+  const trim = new THREE.Mesh(
+    new THREE.TorusGeometry(0.28, 0.03, 8, 32),
+    new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: color, emissiveIntensity: 0.6 })
+  );
+  trim.rotation.x = Math.PI / 2;
+  trim.position.y = 0.17;
+  group.add(trim);
+  return group;
+}
+
+function createArcherTower(color: number): THREE.Group {
+  const group = createPedestal(color);
   const wood = standardMaterial(0x6b4423);
   const roof = standardMaterial(color, color, 0.22);
-
-  const base = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.36, 0.22, 8), wood);
-  base.position.y = 0.11;
-  group.add(base);
 
   const tower = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.22, 0.95, 8), standardMaterial(0x9ca3af));
   tower.position.y = 0.62;
@@ -115,6 +160,13 @@ function createArcherTower(color: number): THREE.Group {
   bow.rotation.z = Math.PI / 2;
   bow.position.set(0.26, 0.8, 0);
   group.add(bow);
+
+  const balcony = new THREE.Mesh(new THREE.TorusGeometry(0.25, 0.03, 8, 28), wood);
+  balcony.rotation.x = Math.PI / 2;
+  balcony.position.y = 0.92;
+  group.add(balcony);
+
+  addTowerShadow(group);
   return group;
 }
 
@@ -142,10 +194,7 @@ function createMagicTower(color: number): THREE.Group {
 }
 
 function createElementalPylon(color: number, topper: 'crystal' | 'coil' | 'orb'): THREE.Group {
-  const group = new THREE.Group();
-  const pedestal = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.38, 0.18, 10), standardMaterial(0x1f2937));
-  pedestal.position.y = 0.09;
-  group.add(pedestal);
+  const group = createPedestal(color);
 
   const column = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.18, 0.62, 10), standardMaterial(0x475569));
   column.position.y = 0.45;
@@ -166,14 +215,77 @@ function createElementalPylon(color: number, topper: 'crystal' | 'coil' | 'orb')
     orb.position.y = 0.96;
     group.add(orb);
   }
+  addTowerShadow(group);
+  return group;
+}
+
+function createHealerTower(color: number): THREE.Group {
+  const group = createPedestal(color);
+  const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.18, 0.72, 12), standardMaterial(0xffffff, color, 0.3));
+  pillar.position.y = 0.5;
+  group.add(pillar);
+
+  const halo = new THREE.Mesh(new THREE.TorusGeometry(0.24, 0.03, 8, 28), standardMaterial(0xfef2f2, color, 0.82));
+  halo.rotation.x = Math.PI / 2;
+  halo.position.y = 1.06;
+  group.add(halo);
+
+  const crossV = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.34, 0.08), standardMaterial(0xffffff, color, 0.5));
+  crossV.position.y = 0.98;
+  group.add(crossV);
+
+  const crossH = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.08, 0.08), standardMaterial(0xffffff, color, 0.5));
+  crossH.position.y = 0.98;
+  group.add(crossH);
+
+  addTowerShadow(group);
+  return group;
+}
+
+function createFlameTower(color: number): THREE.Group {
+  const group = createPedestal(color);
+  const brazier = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.28, 0.28, 10), standardMaterial(0x7c2d12));
+  brazier.position.y = 0.3;
+  group.add(brazier);
+
+  const flame = new THREE.Mesh(new THREE.ConeGeometry(0.17, 0.5, 8), standardMaterial(0xffedd5, color, 1));
+  flame.position.y = 0.82;
+  group.add(flame);
+
+  const flameCore = new THREE.Mesh(new THREE.SphereGeometry(0.12, 12, 12), standardMaterial(0xffffff, 0xffedd5, 1));
+  flameCore.position.y = 0.66;
+  group.add(flameCore);
+
+  addTowerShadow(group);
+  return group;
+}
+
+function createWordTower(color: number): THREE.Group {
+  const group = createPedestal(color);
+  const tablet = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.56, 0.12), standardMaterial(0x164e63));
+  tablet.position.y = 0.56;
+  group.add(tablet);
+
+  const runeLine1 = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.05, 0.02), standardMaterial(0xffffff, color, 0.9));
+  runeLine1.position.set(0, 0.68, 0.08);
+  group.add(runeLine1);
+
+  const runeLine2 = runeLine1.clone();
+  runeLine2.scale.x = 0.7;
+  runeLine2.position.y = 0.52;
+  group.add(runeLine2);
+
+  const glyph = new THREE.Mesh(new THREE.TorusGeometry(0.13, 0.024, 8, 24), standardMaterial(0xffffff, color, 0.95));
+  glyph.rotation.y = Math.PI / 2;
+  glyph.position.set(0.26, 0.72, 0);
+  group.add(glyph);
+
+  addTowerShadow(group);
   return group;
 }
 
 function createMineTower(color: number): THREE.Group {
-  const group = new THREE.Group();
-  const base = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.4, 0.16, 10), standardMaterial(0x3f2c16));
-  base.position.y = 0.08;
-  group.add(base);
+  const group = createPedestal(color);
 
   const crate = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.34, 0.42), standardMaterial(0x7c4a19));
   crate.position.y = 0.33;
@@ -182,16 +294,21 @@ function createMineTower(color: number): THREE.Group {
   const nugget = new THREE.Mesh(new THREE.IcosahedronGeometry(0.14, 0), standardMaterial(color, color, 0.7));
   nugget.position.y = 0.63;
   group.add(nugget);
+
+  const rails = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.04, 0.56), standardMaterial(0x334155));
+  rails.position.y = 0.19;
+  group.add(rails);
+  addTowerShadow(group);
   return group;
 }
 
 function createCannonTower(color: number): THREE.Group {
-  const group = new THREE.Group();
+  const group = createPedestal(color);
   const darkMetal = standardMaterial(0x475569);
   const accent = standardMaterial(color, color, 0.15);
 
   const base = new THREE.Mesh(new THREE.BoxGeometry(0.54, 0.18, 0.54), accent);
-  base.position.y = 0.09;
+  base.position.y = 0.24;
   group.add(base);
 
   const wheelLeft = new THREE.Mesh(new THREE.TorusGeometry(0.14, 0.05, 10, 20), darkMetal);
@@ -211,6 +328,7 @@ function createCannonTower(color: number): THREE.Group {
   muzzle.rotation.y = Math.PI / 2;
   muzzle.position.set(0.62, 0.5, 0);
   group.add(muzzle);
+  addTowerShadow(group);
   return group;
 }
 
@@ -236,10 +354,7 @@ function createSniperTower(color: number): THREE.Group {
 }
 
 function createSupportTower(color: number): THREE.Group {
-  const group = new THREE.Group();
-  const base = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.38, 0.18, 10), standardMaterial(0x1e293b));
-  base.position.y = 0.09;
-  group.add(base);
+  const group = createPedestal(color);
 
   const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.18, 0.72, 10), standardMaterial(color, color, 0.25));
   pillar.position.y = 0.5;
@@ -248,11 +363,12 @@ function createSupportTower(color: number): THREE.Group {
   const top = new THREE.Mesh(new THREE.IcosahedronGeometry(0.22, 0), standardMaterial(0xffffff, color, 0.65));
   top.position.y = 1.02;
   group.add(top);
+  addTowerShadow(group);
   return group;
 }
 
 function createWallTower(color: number): THREE.Group {
-  const group = new THREE.Group();
+  const group = createPedestal(color);
   const stone = standardMaterial(0x7c5a3a);
   const accent = standardMaterial(color, color, 0.08);
 
@@ -271,6 +387,7 @@ function createWallTower(color: number): THREE.Group {
     spikes.add(spike);
   }
   group.add(spikes);
+  addTowerShadow(group);
   return group;
 }
 
@@ -283,14 +400,12 @@ function createTowerMesh(type: TowerType, selected: boolean): THREE.Group {
       group = createArcherTower(color);
       break;
     case 'MAGIC':
-    case 'WORD':
-    case 'DIVINE':
     case 'CHRONO':
+    case 'DIVINE':
       group = createMagicTower(color);
       break;
     case 'CANNON':
     case 'METEOR':
-    case 'FLAME':
       group = createCannonTower(color);
       break;
     case 'ICE':
@@ -300,10 +415,18 @@ function createTowerMesh(type: TowerType, selected: boolean): THREE.Group {
       group = createElementalPylon(color, 'coil');
       break;
     case 'POISON':
-    case 'HEALER':
-    case 'PHOENIX':
     case 'VOID':
       group = createElementalPylon(color, 'orb');
+      break;
+    case 'HEALER':
+      group = createHealerTower(color);
+      break;
+    case 'PHOENIX':
+    case 'FLAME':
+      group = createFlameTower(color);
+      break;
+    case 'WORD':
+      group = createWordTower(color);
       break;
     case 'SNIPER':
       group = createSniperTower(color);
@@ -337,6 +460,19 @@ function createHumanoidEnemy(color: number, elite: boolean): THREE.Group {
   const shoulders = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.08, 0.22), standardMaterial(0x1f2937));
   shoulders.position.y = 0.55;
   group.add(shoulders);
+  return group;
+}
+
+function createArmoredEnemy(color: number, elite: boolean): THREE.Group {
+  const group = createHumanoidEnemy(color, elite);
+  const armor = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.3, 0.3), standardMaterial(0xe2e8f0));
+  armor.position.y = 0.42;
+  group.add(armor);
+
+  const shield = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.08, 16), standardMaterial(0x64748b));
+  shield.rotation.z = Math.PI / 2;
+  shield.position.set(0.24, 0.46, 0);
+  group.add(shield);
   return group;
 }
 
@@ -401,7 +537,20 @@ function createFlyingEnemy(color: number, elite: boolean): THREE.Group {
   return group;
 }
 
-function createBossEnemy(color: number, elite: boolean): THREE.Group {
+function createCasterEnemy(color: number, elite: boolean): THREE.Group {
+  const group = createHumanoidEnemy(color, elite);
+  const staff = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.56, 8), standardMaterial(0xf8fafc));
+  staff.position.set(0.18, 0.54, 0);
+  staff.rotation.z = 0.2;
+  group.add(staff);
+
+  const orb = new THREE.Mesh(new THREE.SphereGeometry(0.07, 12, 12), standardMaterial(0xffffff, color, 0.9));
+  orb.position.set(0.24, 0.84, 0);
+  group.add(orb);
+  return group;
+}
+
+function createBossEnemy(color: number, elite: boolean, type: Enemy['type']): THREE.Group {
   const group = new THREE.Group();
   const mat = standardMaterial(color, 0xffaa00, elite ? 0.4 : 0.18);
 
@@ -410,14 +559,28 @@ function createBossEnemy(color: number, elite: boolean): THREE.Group {
   core.scale.set(1.2, 1.5, 1.1);
   group.add(core);
 
-  const hornLeft = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.32, 6), standardMaterial(0xfef3c7));
-  hornLeft.position.set(-0.18, 1.08, 0);
-  hornLeft.rotation.z = 0.45;
-  group.add(hornLeft);
-  const hornRight = hornLeft.clone();
-  hornRight.position.x = 0.18;
-  hornRight.rotation.z = -0.45;
-  group.add(hornRight);
+  if (type === 'HYDRA') {
+    for (const x of [-0.22, 0, 0.22]) {
+      const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.08, 0.52, 8), standardMaterial(0x14532d, color, 0.45));
+      neck.position.set(x, 0.86, 0);
+      neck.rotation.z = x * 0.8;
+      group.add(neck);
+
+      const head = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.25, 6), standardMaterial(0x22c55e, color, 0.55));
+      head.position.set(x * 1.1, 1.18, 0);
+      head.rotation.z = Math.PI / 2;
+      group.add(head);
+    }
+  } else {
+    const hornLeft = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.32, 6), standardMaterial(0xfef3c7));
+    hornLeft.position.set(-0.18, 1.08, 0);
+    hornLeft.rotation.z = 0.45;
+    group.add(hornLeft);
+    const hornRight = hornLeft.clone();
+    hornRight.position.x = 0.18;
+    hornRight.rotation.z = -0.45;
+    group.add(hornRight);
+  }
 
   const chest = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.24, 0.28), standardMaterial(0x111827));
   chest.position.set(0, 0.38, 0);
@@ -429,17 +592,29 @@ function createEnemyMesh(enemy: Enemy): THREE.Group {
   const color = ENEMY_COLORS[enemy.type] ?? 0xef4444;
   let group: THREE.Group;
 
-  if (['DRAGON', 'LICH_KING', 'DEMON_LORD', 'HYDRA', 'WORD_DESTROYER'].includes(enemy.type)) {
-    group = createBossEnemy(color, !!enemy.isElite);
+  if (BOSS_TYPES.has(enemy.type)) {
+    group = createBossEnemy(color, !!enemy.isElite, enemy.type);
   } else if (enemy.type === 'SLIME') {
     group = createSlimeEnemy(color, !!enemy.isElite);
-  } else if (['BAT', 'HARPY', 'DRAGON_WHELP', 'GARGOYLE', 'PHOENIX_CHICK', 'WYVERN'].includes(enemy.type)) {
+  } else if (FLYING_TYPES.has(enemy.type)) {
     group = createFlyingEnemy(color, !!enemy.isElite);
-  } else if (['WOLF', 'SLIME', 'IRON_TURTLE'].includes(enemy.type)) {
+  } else if (ARMORED_TYPES.has(enemy.type)) {
+    group = createArmoredEnemy(color, !!enemy.isElite);
+  } else if (CASTER_TYPES.has(enemy.type)) {
+    group = createCasterEnemy(color, !!enemy.isElite);
+  } else if (['WOLF', 'IRON_TURTLE'].includes(enemy.type)) {
     group = createBeastEnemy(color, !!enemy.isElite);
   } else {
     group = createHumanoidEnemy(color, !!enemy.isElite);
   }
+
+  const shadow = new THREE.Mesh(
+    new THREE.CircleGeometry(BOSS_TYPES.has(enemy.type) ? 0.48 : 0.32, 24),
+    new THREE.MeshBasicMaterial({ color: 0x020617, transparent: true, opacity: 0.25 })
+  );
+  shadow.rotation.x = -Math.PI / 2;
+  shadow.position.y = 0.02;
+  group.add(shadow);
 
   if (enemy.isElite) addSelectionRing(group, 0xfacc15);
 
@@ -457,10 +632,10 @@ function createEnemyMesh(enemy: Enemy): THREE.Group {
 }
 
 function updateEnemyMesh(group: THREE.Group, enemy: Enemy, time: number): void {
-  const bob = enemy.isRaging ? 0.08 : 0.04;
+  const bob = enemy.isRaging ? 0.08 : FLYING_TYPES.has(enemy.type) ? 0.18 : 0.05;
   group.position.y = Math.sin(time * (enemy.isRaging ? 8 : 4)) * bob;
   group.rotation.y += enemy.isRaging ? 0.07 : 0.03;
-  if (enemy.type === 'BAT' || enemy.type === 'HARPY' || enemy.type === 'WYVERN' || enemy.type === 'DRAGON') {
+  if (FLYING_TYPES.has(enemy.type) || enemy.type === 'DRAGON') {
     const leftWing = group.children[1] as THREE.Mesh | undefined;
     const rightWing = group.children[2] as THREE.Mesh | undefined;
     if (leftWing && rightWing) {
@@ -474,16 +649,60 @@ function createMapTile(cell: number): THREE.Mesh {
   const isPath = cell === 1;
   const isBuild = cell !== 1;
   const material = new THREE.MeshStandardMaterial({
-    color: isPath ? 0x64748b : isBuild ? 0x163c35 : 0x0f2d23,
-    roughness: isPath ? 0.62 : 0.94,
+    color: isPath ? 0x64748b : isBuild ? 0x163f37 : 0x0f2d23,
+    roughness: isPath ? 0.62 : 0.92,
     metalness: isPath ? 0.12 : 0.02,
   });
   const tile = new THREE.Mesh(
-    new THREE.BoxGeometry(0.94, isPath ? 0.08 : 0.06, 0.94),
+    new THREE.BoxGeometry(0.94, isPath ? 0.12 : 0.08, 0.94),
     material
   );
   tile.receiveShadow = true;
   return tile;
+}
+
+function createProjectileMesh(color: number): THREE.Group {
+  const group = new THREE.Group();
+  const core = new THREE.Mesh(
+    new THREE.SphereGeometry(0.07, 10, 10),
+    new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.9 })
+  );
+  group.add(core);
+
+  const tail = new THREE.Mesh(
+    new THREE.ConeGeometry(0.06, 0.24, 10),
+    new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: color, emissiveIntensity: 0.8 })
+  );
+  tail.position.x = -0.1;
+  tail.rotation.z = Math.PI / 2;
+  group.add(tail);
+
+  const halo = new THREE.Mesh(new THREE.RingGeometry(0.09, 0.14, 18), basicGlow(color, 0.34));
+  halo.rotation.y = Math.PI / 2;
+  group.add(halo);
+  return group;
+}
+
+function spawnBurst(target: THREE.Object3D, parent: THREE.Group, effects: BurstEffect[], color: number, count: number, upward = 1.2): void {
+  const burst = new THREE.Group();
+  for (let i = 0; i < count; i++) {
+    const shard = new THREE.Mesh(
+      new THREE.IcosahedronGeometry(0.04 + Math.random() * 0.04, 0),
+      new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.7 })
+    );
+    shard.position.set((Math.random() - 0.5) * 0.28, Math.random() * 0.18, (Math.random() - 0.5) * 0.28);
+    burst.add(shard);
+  }
+
+  burst.position.copy(target.position);
+  parent.add(burst);
+  effects.push({
+    mesh: burst,
+    velocity: new THREE.Vector3((Math.random() - 0.5) * 0.02, upward * 0.01, (Math.random() - 0.5) * 0.02),
+    life: 0.55,
+    maxLife: 0.55,
+    spin: (Math.random() - 0.5) * 0.2,
+  });
 }
 
 export default function ThreeBattlefield({
@@ -510,25 +729,25 @@ export default function ThreeBattlefield({
     host.appendChild(renderer.domElement);
 
     const scene = new THREE.Scene();
-    scene.fog = new THREE.Fog(0x071525, 8, 28);
+    scene.fog = new THREE.Fog(0x071525, 8, 30);
 
     const camera = new THREE.PerspectiveCamera(42, width / height, 0.1, 100);
-    camera.position.set(7.8, 8.7, 12.5);
-    camera.lookAt(7.8, 0, 4.8);
+    camera.position.set(7.8, 9, 12.9);
+    camera.lookAt(7.8, 0.2, 4.8);
 
-    scene.add(new THREE.AmbientLight(0xa5f3fc, 1.3));
+    scene.add(new THREE.AmbientLight(0xa5f3fc, 1.32));
 
-    const keyLight = new THREE.DirectionalLight(0xffffff, 1.55);
+    const keyLight = new THREE.DirectionalLight(0xffffff, 1.65);
     keyLight.position.set(4, 10, 7);
     keyLight.castShadow = true;
     keyLight.shadow.mapSize.set(2048, 2048);
     scene.add(keyLight);
 
-    const fillLight = new THREE.PointLight(0x2dd4bf, 14, 26, 2);
+    const fillLight = new THREE.PointLight(0x2dd4bf, 15, 26, 2);
     fillLight.position.set(12, 5, 2);
     scene.add(fillLight);
 
-    const rimLight = new THREE.PointLight(0x7c3aed, 16, 32, 2);
+    const rimLight = new THREE.PointLight(0x7c3aed, 17, 32, 2);
     rimLight.position.set(-4, 8, 8);
     scene.add(rimLight);
 
@@ -537,7 +756,8 @@ export default function ThreeBattlefield({
     const enemyGroup = new THREE.Group();
     const projectileGroup = new THREE.Group();
     const overlayGroup = new THREE.Group();
-    scene.add(mapGroup, towerGroup, enemyGroup, projectileGroup, overlayGroup);
+    const burstGroup = new THREE.Group();
+    scene.add(mapGroup, towerGroup, enemyGroup, projectileGroup, overlayGroup, burstGroup);
 
     const ground = new THREE.Mesh(
       new THREE.PlaneGeometry(22, 15),
@@ -548,9 +768,16 @@ export default function ThreeBattlefield({
       })
     );
     ground.rotation.x = -Math.PI / 2;
-    ground.position.set(7.5, -0.05, 4.5);
+    ground.position.set(7.5, -0.06, 4.5);
     ground.receiveShadow = true;
     scene.add(ground);
+
+    const board = new THREE.Mesh(
+      new THREE.BoxGeometry(17.8, 0.32, 11.8),
+      new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.82, metalness: 0.08 })
+    );
+    board.position.set(7.5, -0.18, 4.5);
+    scene.add(board);
 
     const backWall = new THREE.Mesh(
       new THREE.PlaneGeometry(22, 8),
@@ -561,7 +788,7 @@ export default function ThreeBattlefield({
 
     const sideGlow = new THREE.Mesh(
       new THREE.PlaneGeometry(4, 14),
-      new THREE.MeshBasicMaterial({ color: 0x0f766e, transparent: true, opacity: 0.18, side: THREE.DoubleSide })
+      new THREE.MeshBasicMaterial({ color: 0x0f766e, transparent: true, opacity: 0.2, side: THREE.DoubleSide })
     );
     sideGlow.position.set(-1.5, 2.2, 4.5);
     sideGlow.rotation.y = Math.PI / 2.8;
@@ -571,13 +798,35 @@ export default function ThreeBattlefield({
     rightGlow.rotation.y = -Math.PI / 2.8;
     scene.add(rightGlow);
 
+    for (const z of [-1.2, 10.2]) {
+      const rail = new THREE.Mesh(
+        new THREE.BoxGeometry(18.2, 0.55, 0.5),
+        new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.86 })
+      );
+      rail.position.set(7.5, 0.08, z);
+      scene.add(rail);
+    }
+
+    for (const x of [-1.2, 16.2]) {
+      const rail = new THREE.Mesh(
+        new THREE.BoxGeometry(0.5, 0.55, 11.4),
+        new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.86 })
+      );
+      rail.position.set(x, 0.08, 4.5);
+      scene.add(rail);
+    }
+
     const towerMeshes = new Map<string, THREE.Group>();
     const enemyMeshes = new Map<string, THREE.Group>();
-    const projectileMeshes = new Map<string, THREE.Mesh>();
+    const projectileMeshes = new Map<string, THREE.Group>();
+    const projectilePrev = new Map<string, THREE.Vector3>();
     const buildPads: THREE.Mesh[] = [];
+    const towerSpawnFrames = new Map<string, number>();
+    const enemySpawnFrames = new Map<string, number>();
+    const effects: BurstEffect[] = [];
     const placementRing = new THREE.Mesh(
       new THREE.RingGeometry(0.36, 0.47, 32),
-      new THREE.MeshBasicMaterial({ color: 0x22c55e, transparent: true, opacity: 0.55, side: THREE.DoubleSide })
+      basicGlow(0x22c55e, 0.65)
     );
     placementRing.rotation.x = -Math.PI / 2;
     placementRing.visible = false;
@@ -585,12 +834,21 @@ export default function ThreeBattlefield({
 
     const placementPlate = new THREE.Mesh(
       new THREE.PlaneGeometry(0.9, 0.9),
-      new THREE.MeshBasicMaterial({ color: 0x22c55e, transparent: true, opacity: 0.18, side: THREE.DoubleSide })
+      basicGlow(0x22c55e, 0.22)
     );
     placementPlate.rotation.x = -Math.PI / 2;
-    placementPlate.position.y = 0.081;
+    placementPlate.position.y = 0.126;
     placementPlate.visible = false;
     overlayGroup.add(placementPlate);
+
+    const rangeRing = new THREE.Mesh(
+      new THREE.RingGeometry(0.8, 0.86, 64),
+      basicGlow(0x22d3ee, 0.22)
+    );
+    rangeRing.rotation.x = -Math.PI / 2;
+    rangeRing.position.y = 0.122;
+    rangeRing.visible = false;
+    overlayGroup.add(rangeRing);
 
     let frame = 0;
     let raf = 0;
@@ -604,32 +862,32 @@ export default function ThreeBattlefield({
         for (let col = 0; col < map.grid[row].length; col++) {
           const cell = map.grid[row][col];
           const tile = createMapTile(cell);
-          tile.position.set(col + 0.5, cell === 1 ? 0.04 : 0.03, rows - row - 0.5);
+          tile.position.set(col + 0.5, cell === 1 ? 0.06 : 0.04, rows - row - 0.5);
           mapGroup.add(tile);
 
           if (cell === 1) {
             const stripe = new THREE.Mesh(
               new THREE.PlaneGeometry(0.78, 0.78),
-              new THREE.MeshBasicMaterial({ color: 0xe2e8f0, transparent: true, opacity: 0.11 })
+              basicGlow(0xe2e8f0, 0.14)
             );
             stripe.rotation.x = -Math.PI / 2;
-            stripe.position.set(col + 0.5, 0.085, rows - row - 0.5);
+            stripe.position.set(col + 0.5, 0.125, rows - row - 0.5);
             mapGroup.add(stripe);
           }
 
           if (cell !== 1) {
-            const pad = new THREE.Mesh(
-              new THREE.PlaneGeometry(0.7, 0.7),
-              new THREE.MeshBasicMaterial({
-                color: 0x34d399,
-                transparent: true,
-                opacity: 0.14,
-              })
+            const padBase = new THREE.Mesh(
+              new THREE.CylinderGeometry(0.33, 0.36, 0.04, 20),
+              new THREE.MeshStandardMaterial({ color: 0x065f46, roughness: 0.78, metalness: 0.06 })
             );
-            pad.rotation.x = -Math.PI / 2;
-            pad.position.set(col + 0.5, 0.071, rows - row - 0.5);
-            mapGroup.add(pad);
-            buildPads.push(pad);
+            padBase.position.set(col + 0.5, 0.1, rows - row - 0.5);
+            mapGroup.add(padBase);
+
+            const padRing = new THREE.Mesh(new THREE.RingGeometry(0.24, 0.33, 30), basicGlow(0x34d399, 0.22));
+            padRing.rotation.x = -Math.PI / 2;
+            padRing.position.set(col + 0.5, 0.125, rows - row - 0.5);
+            mapGroup.add(padRing);
+            buildPads.push(padRing);
           }
         }
       }
@@ -639,6 +897,7 @@ export default function ThreeBattlefield({
       if (!placementInfo) {
         placementRing.visible = false;
         placementPlate.visible = false;
+        rangeRing.visible = false;
         return;
       }
 
@@ -646,14 +905,19 @@ export default function ThreeBattlefield({
       const x = placementInfo.col + 0.5;
       const z = rows - placementInfo.row - 0.5;
       const color = placementInfo.canPlace ? 0x22c55e : 0xef4444;
+      const rangeScale = Math.max(1.1, placementInfo.range / 2.9);
 
       (placementRing.material as THREE.MeshBasicMaterial).color.setHex(color);
       (placementPlate.material as THREE.MeshBasicMaterial).color.setHex(color);
-      placementRing.scale.setScalar(Math.max(1, placementInfo.range / 3));
-      placementRing.position.set(x, 0.08, z);
-      placementPlate.position.set(x, 0.081, z);
+      (rangeRing.material as THREE.MeshBasicMaterial).color.setHex(placementInfo.canPlace ? 0x22d3ee : 0xfca5a5);
+      placementRing.scale.setScalar(1);
+      placementRing.position.set(x, 0.128, z);
+      placementPlate.position.set(x, 0.126, z);
+      rangeRing.scale.set(rangeScale, rangeScale, rangeScale);
+      rangeRing.position.set(x, 0.122, z);
       placementRing.visible = true;
       placementPlate.visible = true;
+      rangeRing.visible = true;
     };
 
     const syncTowers = (towers: Tower[]) => {
@@ -667,12 +931,15 @@ export default function ThreeBattlefield({
         if (!mesh) {
           mesh = createTowerMesh(tower.type, selected);
           towerMeshes.set(tower.id, mesh);
+          towerSpawnFrames.set(tower.id, frame);
           towerGroup.add(mesh);
         }
 
-        mesh.position.set(tower.position.col + 0.5, 0, rows - tower.position.row - 0.5);
-        mesh.rotation.y += 0.01;
-        mesh.scale.setScalar(1 + tower.grade * 0.06);
+        const bornAt = towerSpawnFrames.get(tower.id) ?? frame;
+        const appear = Math.min(1, (frame - bornAt) / 18);
+        mesh.position.set(tower.position.col + 0.5, (1 - appear) * 0.5, rows - tower.position.row - 0.5);
+        mesh.rotation.y += 0.01 + tower.grade * 0.002;
+        mesh.scale.setScalar((0.72 + appear * 0.28) * (1 + tower.grade * 0.06));
 
         const hasRing = mesh.children.some((child) => child.userData.selectionRing);
         if (selected && !hasRing) addSelectionRing(mesh, TOWER_COLORS[tower.type] ?? 0xffffff);
@@ -686,6 +953,7 @@ export default function ThreeBattlefield({
         if (seen.has(id)) continue;
         towerGroup.remove(mesh);
         towerMeshes.delete(id);
+        towerSpawnFrames.delete(id);
       }
     };
 
@@ -699,20 +967,28 @@ export default function ThreeBattlefield({
         if (!mesh) {
           mesh = createEnemyMesh(enemy);
           enemyMeshes.set(enemy.id, mesh);
+          enemySpawnFrames.set(enemy.id, frame);
           enemyGroup.add(mesh);
         }
 
+        const bornAt = enemySpawnFrames.get(enemy.id) ?? frame;
+        const appear = Math.min(1, (frame - bornAt) / 12);
         const pos = worldPositionFromCanvas(enemy.position.x, enemy.position.y, cellSize, rows);
         mesh.position.x = pos.x;
         mesh.position.z = pos.z;
         updateEnemyMesh(mesh, enemy, frame * 0.016);
-        mesh.scale.setScalar(['DRAGON', 'LICH_KING', 'DEMON_LORD', 'HYDRA', 'WORD_DESTROYER'].includes(enemy.type) ? 1.55 : 1);
+        mesh.scale.setScalar((BOSS_TYPES.has(enemy.type) ? 1.55 : 1) * (0.78 + appear * 0.22));
+        mesh.userData.type = enemy.type;
       }
 
       for (const [id, mesh] of enemyMeshes) {
         if (seen.has(id)) continue;
+        const mat = (mesh.children[0] as THREE.Mesh | undefined)?.material;
+        const color = mat instanceof THREE.MeshStandardMaterial ? mat.color.getHex() : 0xef4444;
+        spawnBurst(mesh, burstGroup, effects, color, BOSS_TYPES.has((mesh.userData.type as string) ?? '') ? 16 : 8, 1.8);
         enemyGroup.remove(mesh);
         enemyMeshes.delete(id);
+        enemySpawnFrames.delete(id);
       }
     };
 
@@ -723,26 +999,53 @@ export default function ThreeBattlefield({
         seen.add(projectile.id);
         let mesh = projectileMeshes.get(projectile.id);
         if (!mesh) {
-          mesh = new THREE.Mesh(
-            new THREE.SphereGeometry(0.07, 10, 10),
-            new THREE.MeshStandardMaterial({
-              color: TOWER_COLORS[projectile.towerType] ?? 0xffffff,
-              emissive: TOWER_COLORS[projectile.towerType] ?? 0xffffff,
-              emissiveIntensity: 0.8,
-            })
-          );
+          mesh = createProjectileMesh(TOWER_COLORS[projectile.towerType] ?? 0xffffff);
           projectileMeshes.set(projectile.id, mesh);
           projectileGroup.add(mesh);
         }
 
         const pos = worldPositionFromCanvas(projectile.position.x, projectile.position.y, cellSize, rows);
+        const prev = projectilePrev.get(projectile.id) ?? pos.clone();
+        const dir = pos.clone().sub(prev);
+        if (dir.lengthSq() > 0.0001) {
+          mesh.rotation.y = Math.atan2(dir.x, dir.z);
+        }
         mesh.position.set(pos.x, 0.34, pos.z);
+        mesh.scale.setScalar(projectile.isCrit ? 1.28 : 1);
+        projectilePrev.set(projectile.id, pos.clone());
       }
 
       for (const [id, mesh] of projectileMeshes) {
         if (seen.has(id)) continue;
+        const mat = (mesh.children[0] as THREE.Mesh | undefined)?.material;
+        const color = mat instanceof THREE.MeshStandardMaterial ? mat.color.getHex() : 0xffffff;
+        spawnBurst(mesh, burstGroup, effects, color, 4, 0.8);
         projectileGroup.remove(mesh);
         projectileMeshes.delete(id);
+        projectilePrev.delete(id);
+      }
+    };
+
+    const updateEffects = () => {
+      for (let i = effects.length - 1; i >= 0; i--) {
+        const effect = effects[i];
+        effect.life -= 0.016;
+        effect.mesh.position.add(effect.velocity);
+        effect.mesh.rotation.y += effect.spin;
+        effect.mesh.scale.setScalar(0.9 + (1 - effect.life / effect.maxLife) * 0.6);
+
+        for (const child of effect.mesh.children) {
+          const mesh = child as THREE.Mesh;
+          if (mesh.material instanceof THREE.MeshStandardMaterial) {
+            mesh.material.opacity = Math.max(0, effect.life / effect.maxLife);
+            mesh.material.transparent = true;
+          }
+        }
+
+        if (effect.life <= 0) {
+          burstGroup.remove(effect.mesh);
+          effects.splice(i, 1);
+        }
       }
     };
 
@@ -755,10 +1058,13 @@ export default function ThreeBattlefield({
         syncEnemies(engine.getEnemies());
         syncProjectiles(engine);
         syncPlacement();
+        updateEffects();
         for (const pad of buildPads) {
-          const pulse = 0.11 + (Math.sin(frame * 0.05 + pad.position.x) + 1) * 0.025;
+          const pulse = 0.16 + (Math.sin(frame * 0.05 + pad.position.x * 0.9) + 1) * 0.05;
           (pad.material as THREE.MeshBasicMaterial).opacity = pulse;
         }
+        placementRing.rotation.z += 0.01;
+        rangeRing.rotation.z -= 0.004;
       }
 
       renderer.render(scene, camera);

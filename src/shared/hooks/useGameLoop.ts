@@ -129,7 +129,6 @@ export function useGameLoop(
 
     // Sound engine
     const sound = SoundEngine.getInstance();
-    sound.initAudio();
     soundRef.current = sound;
 
     return () => {

@@ -201,10 +201,16 @@ export class SoundEngine {
     }
   }
 
+  private ensureAudioReady(): boolean {
+    this.initAudio();
+    return Boolean(this.audioCtx && this.masterGain && this.sfxGain && this.bgmGain);
+  }
+
   /**
    * Resume audio context (needed after user interaction on some browsers).
    */
   async resumeContext(): Promise<void> {
+    this.initAudio();
     if (this.audioCtx && this.audioCtx.state === 'suspended') {
       await this.audioCtx.resume();
     }
@@ -238,7 +244,7 @@ export class SoundEngine {
 
   generateBGM(worldId: WorldId): void {
     this.stopBGM();
-    if (!this.audioCtx || !this.bgmGain) return;
+    if (!this.ensureAudioReady() || !this.audioCtx || !this.bgmGain) return;
 
     this.currentWorldId = worldId;
     this.bgmPlaying = true;
@@ -375,7 +381,7 @@ export class SoundEngine {
   // ── SFX ───────────────────────────────────────────────────
 
   playSFX(type: SFXType): void {
-    if (!this.audioCtx || !this.sfxGain) return;
+    if (!this.ensureAudioReady() || !this.audioCtx || !this.sfxGain) return;
 
     switch (type) {
       case 'towerAttack_archer':

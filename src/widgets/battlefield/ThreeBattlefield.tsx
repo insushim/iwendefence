@@ -798,7 +798,7 @@ export default function ThreeBattlefield({
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(width, height, false);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.25));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1));
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.shadowMap.enabled = false;
     host.innerHTML = '';
@@ -807,9 +807,9 @@ export default function ThreeBattlefield({
     const scene = new THREE.Scene();
     scene.fog = new THREE.Fog(0x071525, 8, 30);
 
-    const camera = new THREE.PerspectiveCamera(34, width / height, 0.1, 100);
-    camera.position.set(8, 11.4, 12.8);
-    camera.lookAt(8, 0, 5);
+    const camera = new THREE.PerspectiveCamera(30, width / height, 0.1, 100);
+    camera.position.set(8, 10.6, 16.4);
+    camera.lookAt(8, 0, 5.1);
 
     scene.add(new THREE.AmbientLight(0xa5f3fc, 1.32));
 
@@ -834,13 +834,6 @@ export default function ThreeBattlefield({
     scene.add(mapGroup, towerGroup, enemyGroup, projectileGroup, overlayGroup, burstGroup);
     const rows = getEngine()?.getMapData()?.grid.length ?? 10;
     const cols = getEngine()?.getMapData()?.grid[0]?.length ?? 16;
-    const pickPlane = new THREE.Mesh(
-      new THREE.PlaneGeometry(cols, rows),
-      new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, side: THREE.DoubleSide })
-    );
-    pickPlane.rotation.x = -Math.PI / 2;
-    pickPlane.position.set(cols / 2, 0.12, rows / 2);
-    scene.add(pickPlane);
 
     const ground = new THREE.Mesh(
       new THREE.PlaneGeometry(22, 15),
@@ -903,6 +896,7 @@ export default function ThreeBattlefield({
     const enemyMeshes = new Map<string, THREE.Group>();
     const projectileMeshes = new Map<string, THREE.Group>();
     const projectilePrev = new Map<string, THREE.Vector3>();
+    const tilePickMeshes: THREE.Mesh[] = [];
     const buildPads: THREE.Mesh[] = [];
     const towerSpawnFrames = new Map<string, number>();
     const enemySpawnFrames = new Map<string, number>();
@@ -956,15 +950,11 @@ export default function ThreeBattlefield({
       pointer.y = -((clientY - rect.top) / rect.height) * 2 + 1;
       raycaster.setFromCamera(pointer, camera);
 
-      const hit = raycaster.intersectObject(pickPlane, false)[0];
+      const hit = raycaster.intersectObjects(tilePickMeshes, false)[0];
       if (!hit) return null;
-
-      const localX = hit.point.x;
-      const localZ = hit.point.z;
-      const col = Math.floor(localX);
-      const row = rows - Math.floor(localZ) - 1;
-
-      if (col < 0 || col >= cols || row < 0 || row >= rows) return null;
+      const row = hit.object.userData.row as number | undefined;
+      const col = hit.object.userData.col as number | undefined;
+      if (row === undefined || col === undefined) return null;
       return { row, col };
     };
 
@@ -1023,6 +1013,9 @@ export default function ThreeBattlefield({
           const cell = map.grid[row][col];
           const tile = createMapTile(cell);
           tile.position.set(col + 0.5, cell === 1 ? 0.06 : 0.04, rows - row - 0.5);
+          tile.userData.row = row;
+          tile.userData.col = col;
+          tilePickMeshes.push(tile);
           mapGroup.add(tile);
 
           if (cell === 1) {

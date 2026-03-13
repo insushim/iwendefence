@@ -934,7 +934,13 @@ function PlayPageContent() {
       {/* Game Canvas Area */}
       <div ref={containerRef} className="flex-1 relative flex items-center justify-center bg-[#0d1520]">
         {/* Canvas wrapper with glow border + vignette */}
-        <div className="relative">
+      <div
+        className="relative"
+        style={{
+          width: canvasSize.width || undefined,
+          height: canvasSize.height || undefined,
+        }}
+      >
           {canvasSize.width > 0 && canvasSize.height > 0 && (
             <div
               className="absolute inset-0 rounded overflow-hidden"

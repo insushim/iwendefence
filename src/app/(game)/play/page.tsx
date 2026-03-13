@@ -607,7 +607,7 @@ function PlayPageContent() {
 
       if (selectedTower || isRandomTower) {
         const gridValue = mapData.grid[row][col];
-        if (gridValue !== 2) return;
+        if (gridValue === 1) return;
 
         const existingTower = towers.find(
           (t) => t.position.row === row && t.position.col === col
@@ -729,7 +729,7 @@ function PlayPageContent() {
       const existingTower = towers.find(
         (t) => t.position.row === row && t.position.col === col
       );
-      const canPlace = gridValue === 2 && !existingTower && gold >= cost;
+      const canPlace = gridValue !== 1 && !existingTower && gold >= cost;
 
       gameLoop.placementInfoRef.current = {
         towerType: previewType,

@@ -496,6 +496,7 @@ function PlayPageContent() {
 
   const currentHero = HERO_DEFINITIONS[heroId] ?? HERO_DEFINITIONS[DEFAULT_HERO_ID];
   const selectedPlacedTower = towers.find((tower) => tower.id === selectedPlacedTowerId) ?? null;
+  const selectedPlacedTowerDef = selectedPlacedTower ? TOWER_DEFINITIONS[selectedPlacedTower.type] : null;
   const bossAccent = getBossAccent(bossWarningType);
 
   const handleSpeedToggle = useCallback(() => {
@@ -1108,23 +1109,32 @@ function PlayPageContent() {
             <div className="min-w-0 flex-1">
               <div className="text-[10px] uppercase tracking-[0.2em] text-slate-400">Hero Support</div>
               <div className="text-sm font-bold text-white truncate">{currentHero.nameKr}</div>
+              <div className="text-[10px] text-slate-500 truncate">{currentHero.activeSkill.name} / {currentHero.ultimate.name}</div>
             </div>
             <motion.button
               whileTap={{ scale: 0.96 }}
               onClick={castHeroActive}
               disabled={heroCooldowns.active > 0}
-              className="rounded-xl px-3 py-2 text-[11px] font-bold text-white disabled:opacity-40"
-              style={{ background: 'linear-gradient(135deg, rgba(59,130,246,0.8), rgba(14,165,233,0.8))' }}
+              className="rounded-xl px-3 py-2 text-[11px] font-bold text-white disabled:opacity-40 min-w-[78px]"
+              style={{
+                background: 'linear-gradient(135deg, rgba(59,130,246,0.8), rgba(14,165,233,0.8))',
+                boxShadow: heroCooldowns.active <= 0 ? '0 0 18px rgba(56,189,248,0.22)' : undefined,
+              }}
             >
+              <div className="text-[9px] uppercase tracking-[0.22em] text-white/60">Skill</div>
               {heroCooldowns.active > 0 ? `${heroCooldowns.active.toFixed(1)}s` : 'ACTIVE'}
             </motion.button>
             <motion.button
               whileTap={{ scale: 0.96 }}
               onClick={castHeroUltimate}
               disabled={heroCooldowns.ultimate > 0}
-              className="rounded-xl px-3 py-2 text-[11px] font-bold text-white disabled:opacity-40"
-              style={{ background: 'linear-gradient(135deg, rgba(168,85,247,0.82), rgba(236,72,153,0.82))' }}
+              className="rounded-xl px-3 py-2 text-[11px] font-bold text-white disabled:opacity-40 min-w-[78px]"
+              style={{
+                background: 'linear-gradient(135deg, rgba(168,85,247,0.82), rgba(236,72,153,0.82))',
+                boxShadow: heroCooldowns.ultimate <= 0 ? '0 0 18px rgba(236,72,153,0.22)' : undefined,
+              }}
             >
+              <div className="text-[9px] uppercase tracking-[0.22em] text-white/60">Burst</div>
               {heroCooldowns.ultimate > 0 ? `${heroCooldowns.ultimate.toFixed(1)}s` : 'ULT'}
             </motion.button>
           </div>
@@ -1135,9 +1145,41 @@ function PlayPageContent() {
             <div className="flex items-center justify-between mb-2">
               <div>
                 <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Tower Paths</div>
-                <div className="text-sm font-bold text-white">{TOWER_DEFINITIONS[selectedPlacedTower.type]?.nameKr ?? selectedPlacedTower.type}</div>
+                <div className="flex items-center gap-2">
+                  <span className="text-lg leading-none">{selectedPlacedTowerDef?.icon}</span>
+                  <div className="text-sm font-bold text-white">{selectedPlacedTowerDef?.nameKr ?? selectedPlacedTower.type}</div>
+                  <span
+                    className="text-[9px] font-black uppercase tracking-[0.2em] px-2 py-1 rounded-full"
+                    style={{
+                      color: selectedPlacedTowerDef?.color ?? '#94a3b8',
+                      background: `${selectedPlacedTowerDef?.color ?? '#94a3b8'}18`,
+                    }}
+                  >
+                    {selectedPlacedTowerDef ? getAttackTypeLabel(selectedPlacedTowerDef.attackType) : 'Tower'}
+                  </span>
+                </div>
               </div>
               <div className="text-[11px] text-amber-300 font-bold">{gold}G</div>
+            </div>
+            <div className="grid grid-cols-4 gap-2 mb-2">
+              {[
+                { label: 'DMG', value: Math.round(selectedPlacedTower.stats.damage) },
+                { label: 'RNG', value: selectedPlacedTower.stats.range.toFixed(1) },
+                { label: 'SPD', value: selectedPlacedTower.stats.attackSpeed.toFixed(2) },
+                { label: 'CRIT', value: `${Math.round(selectedPlacedTower.stats.critChance * 100)}%` },
+              ].map((stat) => (
+                <div
+                  key={stat.label}
+                  className="rounded-2xl px-2 py-2"
+                  style={{
+                    background: 'linear-gradient(180deg, rgba(15,23,42,0.86), rgba(15,23,42,0.58))',
+                    border: '1px solid rgba(71,85,105,0.18)',
+                  }}
+                >
+                  <div className="text-[9px] uppercase tracking-[0.2em] text-slate-500">{stat.label}</div>
+                  <div className="text-sm font-black text-white">{stat.value}</div>
+                </div>
+              ))}
             </div>
             <div className="grid grid-cols-3 gap-2">
               {getTowerPathInfos(selectedPlacedTower.type).map((pathInfo) => {
@@ -1637,6 +1679,39 @@ function PlayPageContent() {
             className="absolute inset-0 z-25 flex items-center justify-center pointer-events-none"
             style={{ background: 'radial-gradient(ellipse at center, rgba(239,68,68,0.05) 0%, transparent 70%)' }}
           >
+            <div className="absolute inset-x-0 top-0 flex justify-center gap-6 px-10">
+              {[0, 1, 2].map((idx) => (
+                <motion.div
+                  key={`top-${idx}`}
+                  animate={{ opacity: [0.18, 0.9, 0.18], scaleX: [0.88, 1.02, 0.88] }}
+                  transition={{ repeat: Infinity, duration: 0.8, delay: idx * 0.1 }}
+                  className="h-1.5 flex-1 rounded-b-full"
+                  style={{ background: `linear-gradient(90deg, transparent, ${bossAccent.color}, transparent)` }}
+                />
+              ))}
+            </div>
+            <div className="absolute inset-y-0 left-0 flex flex-col justify-center gap-6 py-12">
+              {[0, 1, 2].map((idx) => (
+                <motion.div
+                  key={`left-${idx}`}
+                  animate={{ opacity: [0.18, 0.75, 0.18], scaleY: [0.88, 1.02, 0.88] }}
+                  transition={{ repeat: Infinity, duration: 0.8, delay: idx * 0.08 }}
+                  className="w-1.5 h-20 rounded-r-full"
+                  style={{ background: `linear-gradient(180deg, transparent, ${bossAccent.color}, transparent)` }}
+                />
+              ))}
+            </div>
+            <div className="absolute inset-y-0 right-0 flex flex-col justify-center gap-6 py-12">
+              {[0, 1, 2].map((idx) => (
+                <motion.div
+                  key={`right-${idx}`}
+                  animate={{ opacity: [0.18, 0.75, 0.18], scaleY: [0.88, 1.02, 0.88] }}
+                  transition={{ repeat: Infinity, duration: 0.8, delay: idx * 0.08 }}
+                  className="w-1.5 h-20 rounded-l-full"
+                  style={{ background: `linear-gradient(180deg, transparent, ${bossAccent.color}, transparent)` }}
+                />
+              ))}
+            </div>
             <motion.div
               initial={{ scale: 1.2, opacity: 0, y: 24 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}

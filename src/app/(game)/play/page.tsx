@@ -138,6 +138,46 @@ function fitBattlefieldSize(containerWidth: number, containerHeight: number): {
   };
 }
 
+function getBossAccent(type: string): { label: string; color: string; glow: string } {
+  const normalized = type.toUpperCase();
+  if (normalized.includes('DRAGON')) {
+    return { label: 'DRAGON CLASS', color: '#fb7185', glow: 'rgba(251,113,133,0.35)' };
+  }
+  if (normalized.includes('HYDRA')) {
+    return { label: 'HYDRA CLASS', color: '#4ade80', glow: 'rgba(74,222,128,0.35)' };
+  }
+  if (normalized.includes('LICH') || normalized.includes('WORD')) {
+    return { label: 'ARCANE CLASS', color: '#c084fc', glow: 'rgba(192,132,252,0.35)' };
+  }
+  if (normalized.includes('DEMON')) {
+    return { label: 'HELL CLASS', color: '#f97316', glow: 'rgba(249,115,22,0.35)' };
+  }
+  return { label: 'BOSS ALERT', color: '#f87171', glow: 'rgba(248,113,113,0.35)' };
+}
+
+function getAttackTypeLabel(type: string): string {
+  switch (type) {
+    case 'single':
+      return 'Single';
+    case 'area':
+      return 'Blast';
+    case 'chain':
+      return 'Chain';
+    case 'dot':
+      return 'DoT';
+    case 'heal':
+      return 'Support';
+    case 'block':
+      return 'Block';
+    case 'produce':
+      return 'Eco';
+    case 'buff':
+      return 'Buff';
+    default:
+      return type;
+  }
+}
+
 function PlayPageContent() {
   const searchParams = useSearchParams();
   const worldId = (parseInt(searchParams.get('world') || '1', 10) || 1) as WorldId;
@@ -456,6 +496,7 @@ function PlayPageContent() {
 
   const currentHero = HERO_DEFINITIONS[heroId] ?? HERO_DEFINITIONS[DEFAULT_HERO_ID];
   const selectedPlacedTower = towers.find((tower) => tower.id === selectedPlacedTowerId) ?? null;
+  const bossAccent = getBossAccent(bossWarningType);
 
   const handleSpeedToggle = useCallback(() => {
     const speeds: GameSpeed[] = [1, 2, 3];
@@ -1190,6 +1231,7 @@ function PlayPageContent() {
             {towerList.map((tower) => {
               const isSelected = selectedTower === tower.type && !isRandomTower;
               const canAfford = gold >= tower.cost;
+              const attackBadge = getAttackTypeLabel(tower.attackType);
 
               return (
                 <motion.button
@@ -1227,6 +1269,15 @@ function PlayPageContent() {
                   </span>
                   <span className={`text-[10px] font-medium truncate w-full text-center ${isSelected ? 'text-indigo-200' : 'text-slate-400'}`}>
                     {tower.nameKr}
+                  </span>
+                  <span
+                    className="text-[9px] font-bold uppercase tracking-[0.18em] px-1.5 py-px rounded-full"
+                    style={{
+                      color: canAfford ? tower.color : '#64748b',
+                      background: canAfford ? `${tower.color}1c` : 'rgba(51,65,85,0.35)',
+                    }}
+                  >
+                    {attackBadge}
                   </span>
                   <span
                     className={`text-[10px] font-bold tabular-nums px-1.5 py-px rounded-full ${
@@ -1587,12 +1638,27 @@ function PlayPageContent() {
             style={{ background: 'radial-gradient(ellipse at center, rgba(239,68,68,0.05) 0%, transparent 70%)' }}
           >
             <motion.div
-              initial={{ scale: 2.5, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.5, opacity: 0 }}
+              initial={{ scale: 1.2, opacity: 0, y: 24 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.92, opacity: 0, y: -18 }}
               transition={{ type: 'spring', stiffness: 200 }}
-              className="text-center"
+              className="text-center px-6 py-5 rounded-[28px] border backdrop-blur-xl"
+              style={{
+                background: 'linear-gradient(180deg, rgba(7,11,24,0.82), rgba(15,23,42,0.62))',
+                borderColor: `${bossAccent.color}55`,
+                boxShadow: `0 0 30px ${bossAccent.glow}, inset 0 0 0 1px rgba(255,255,255,0.04)`,
+              }}
             >
+              <div className="mb-2 flex items-center justify-center gap-2">
+                <div className="h-px w-12" style={{ background: `linear-gradient(90deg, transparent, ${bossAccent.color})` }} />
+                <span
+                  className="text-[10px] font-black tracking-[0.32em] uppercase"
+                  style={{ color: bossAccent.color }}
+                >
+                  {bossAccent.label}
+                </span>
+                <div className="h-px w-12" style={{ background: `linear-gradient(90deg, ${bossAccent.color}, transparent)` }} />
+              </div>
               <motion.p
                 animate={{ scale: [1, 1.06, 1] }}
                 transition={{ repeat: Infinity, duration: 0.7 }}
@@ -1606,7 +1672,18 @@ function PlayPageContent() {
               >
                 BOSS INCOMING!
               </motion.p>
-              <p className="text-sm text-red-300/70 mt-1.5 tracking-wide">{bossWarningType}</p>
+              <p className="text-sm mt-1.5 tracking-[0.24em] uppercase" style={{ color: `${bossAccent.color}` }}>{bossWarningType}</p>
+              <div className="mt-3 flex items-center justify-center gap-2">
+                {[0, 1, 2].map((idx) => (
+                  <motion.div
+                    key={idx}
+                    animate={{ opacity: [0.25, 1, 0.25], scale: [0.92, 1.08, 0.92] }}
+                    transition={{ repeat: Infinity, duration: 0.8, delay: idx * 0.12 }}
+                    className="h-2.5 w-12 rounded-full"
+                    style={{ background: `linear-gradient(90deg, transparent, ${bossAccent.color}, transparent)` }}
+                  />
+                ))}
+              </div>
             </motion.div>
           </motion.div>
         )}

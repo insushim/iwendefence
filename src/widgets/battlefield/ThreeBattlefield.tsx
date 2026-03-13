@@ -30,6 +30,7 @@ interface BurstEffect {
 interface BuildPulseEffect {
   ring: THREE.Mesh;
   glow: THREE.Mesh;
+  sigils: THREE.Mesh[];
   life: number;
   maxLife: number;
 }
@@ -143,7 +144,8 @@ function spawnBuildPulse(
   z: number,
   parent: THREE.Group,
   pulses: BuildPulseEffect[],
-  color: number
+  color: number,
+  type: TowerType
 ): void {
   const ring = new THREE.Mesh(new THREE.RingGeometry(0.28, 0.36, 40), basicGlow(color, 0.8));
   ring.rotation.x = -Math.PI / 2;
@@ -153,9 +155,60 @@ function spawnBuildPulse(
   glow.rotation.x = -Math.PI / 2;
   glow.position.set(x, 0.125, z);
 
+  const sigils: THREE.Mesh[] = [];
+  const sigilMaterial = basicGlow(color, 0.72);
+  if (type === 'ARCHER' || type === 'SNIPER') {
+    for (let i = 0; i < 4; i++) {
+      const sigil = new THREE.Mesh(new THREE.PlaneGeometry(0.18, 0.04), sigilMaterial.clone());
+      sigil.rotation.x = -Math.PI / 2;
+      sigil.rotation.z = (Math.PI / 2) * i + Math.PI / 4;
+      sigil.position.set(x, 0.131, z);
+      parent.add(sigil);
+      sigils.push(sigil);
+    }
+  } else if (type === 'HEALER' || type === 'DIVINE') {
+    const vertical = new THREE.Mesh(new THREE.PlaneGeometry(0.08, 0.3), sigilMaterial.clone());
+    vertical.rotation.x = -Math.PI / 2;
+    vertical.position.set(x, 0.131, z);
+    parent.add(vertical);
+    sigils.push(vertical);
+
+    const horizontal = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 0.08), sigilMaterial.clone());
+    horizontal.rotation.x = -Math.PI / 2;
+    horizontal.position.set(x, 0.131, z);
+    parent.add(horizontal);
+    sigils.push(horizontal);
+  } else if (type === 'BARRICADE') {
+    for (let i = -1; i <= 1; i++) {
+      const sigil = new THREE.Mesh(new THREE.CircleGeometry(0.06, 3), sigilMaterial.clone());
+      sigil.rotation.x = -Math.PI / 2;
+      sigil.rotation.z = Math.PI;
+      sigil.position.set(x + i * 0.14, 0.131, z);
+      parent.add(sigil);
+      sigils.push(sigil);
+    }
+  } else if (type === 'WORD' || type === 'MAGIC' || type === 'CHRONO' || type === 'VOID') {
+    for (let i = 0; i < 2; i++) {
+      const sigil = new THREE.Mesh(new THREE.RingGeometry(0.1 + i * 0.08, 0.12 + i * 0.08, 24), sigilMaterial.clone());
+      sigil.rotation.x = -Math.PI / 2;
+      sigil.position.set(x, 0.131 + i * 0.002, z);
+      parent.add(sigil);
+      sigils.push(sigil);
+    }
+  } else {
+    for (let i = 0; i < 4; i++) {
+      const sigil = new THREE.Mesh(new THREE.CircleGeometry(0.05, 18), sigilMaterial.clone());
+      sigil.rotation.x = -Math.PI / 2;
+      const angle = (Math.PI / 2) * i;
+      sigil.position.set(x + Math.cos(angle) * 0.18, 0.131, z + Math.sin(angle) * 0.18);
+      parent.add(sigil);
+      sigils.push(sigil);
+    }
+  }
+
   parent.add(ring);
   parent.add(glow);
-  pulses.push({ ring, glow, life: 0.42, maxLife: 0.42 });
+  pulses.push({ ring, glow, sigils, life: 0.42, maxLife: 0.42 });
 }
 
 function createPlacementGlyph(type: TowerType, color: number): THREE.Group {
@@ -1367,7 +1420,8 @@ export default function ThreeBattlefield({
             rows - tower.position.row - 0.5,
             overlayGroup,
             buildPulses,
-            TOWER_COLORS[tower.type] ?? 0xffffff
+            TOWER_COLORS[tower.type] ?? 0xffffff,
+            tower.type
           );
         }
 
@@ -1513,10 +1567,27 @@ export default function ThreeBattlefield({
         pulse.glow.scale.setScalar(0.8 + progress * 1.4);
         (pulse.ring.material as THREE.MeshBasicMaterial).opacity = Math.max(0, 0.7 - progress * 0.7);
         (pulse.glow.material as THREE.MeshBasicMaterial).opacity = Math.max(0, 0.18 - progress * 0.18);
+        for (let j = 0; j < pulse.sigils.length; j++) {
+          const sigil = pulse.sigils[j];
+          const material = sigil.material as THREE.MeshBasicMaterial;
+          const spread = 0.22 + progress * 0.34;
+          const angle = (Math.PI * 2 * j) / Math.max(1, pulse.sigils.length) + progress * 0.6;
+          const isCentered = pulse.sigils.length <= 3;
+
+          if (!isCentered) {
+            sigil.position.x = pulse.ring.position.x + Math.cos(angle) * spread;
+            sigil.position.z = pulse.ring.position.z + Math.sin(angle) * spread;
+          }
+
+          sigil.scale.setScalar(0.9 + progress * 0.9);
+          sigil.rotation.z += 0.03;
+          material.opacity = Math.max(0, 0.7 - progress * 0.7);
+        }
 
         if (pulse.life <= 0) {
           overlayGroup.remove(pulse.ring);
           overlayGroup.remove(pulse.glow);
+          for (const sigil of pulse.sigils) overlayGroup.remove(sigil);
           buildPulses.splice(i, 1);
         }
       }

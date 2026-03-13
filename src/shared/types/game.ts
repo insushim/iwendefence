@@ -100,6 +100,9 @@ export interface Tower {
   level: number;
   mergeCount: number;
   targetingMode: TargetingMode;
+  upgradePaths?: [number, number, number];
+  specialAbilities?: string[];
+  branchBonuses?: Record<string, number>;
 }
 
 // ── Enemy ────────────────────────────────────────────────────
@@ -137,6 +140,11 @@ export interface Enemy {
   isSplit?: boolean;    // true for split-spawned mini enemies (won't split again)
   spawnTime?: number;   // timestamp (seconds) when enemy was spawned
   isRaging?: boolean;   // true when enemy is in rage mode (last 3 alive)
+  isElite?: boolean;    // promoted enemy in modifier waves
+  eliteRank?: 1 | 2;
+  shield?: number;
+  shieldMax?: number;
+  bossAbilityCooldown?: number;
 }
 
 // ── Hero ─────────────────────────────────────────────────────

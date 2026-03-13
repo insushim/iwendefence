@@ -17,11 +17,15 @@ import { useGameStore, usePlayerStore } from '@/shared/lib/store';
 import { useGameLoop } from '@/shared/hooks/useGameLoop';
 import { useQuizTrigger } from '@/shared/hooks/useQuizTrigger';
 import { getStage } from '@/shared/constants/stages';
+import { HERO_DEFINITIONS, DEFAULT_HERO_ID } from '@/shared/constants/heroes';
 import { TOWER_DEFINITIONS } from '@/shared/constants/towers';
+import { canUpgrade, getAccumulatedEffects, getActiveAbilities, getTowerPathInfos, getUpgrade, getUpgradePath } from '@/shared/constants/towerUpgrades';
 import type { PlacementInfo } from '@/shared/lib/renderer';
-import { TowerType, type GameSpeed, type Tower, type WorldId, type StageId } from '@/shared/types/game';
+import { TowerType, type EnemyType, type GameSpeed, type RoguelikeUpgrade, type Tower, type WorldId, type StageId } from '@/shared/types/game';
 import GameHUD from '@/widgets/hud/GameHUD';
+import ThreeBattlefield from '@/widgets/battlefield/ThreeBattlefield';
 import WordQuizModal from '@/widgets/word-modal/WordQuizModal';
+import UpgradePanel from '@/widgets/upgrade-panel/UpgradePanel';
 import Button from '@/shared/ui/Button';
 import Modal from '@/shared/ui/Modal';
 
@@ -45,10 +49,80 @@ function rollRandomTower(): TowerType {
 
 const towerList = Object.values(TOWER_DEFINITIONS).filter(t => !LEGENDARY_TYPES.has(t.type));
 
+interface RunBonuses {
+  damageMultiplier: number;
+  goldMultiplier: number;
+}
+
+const WAVE_UPGRADE_POOL: RoguelikeUpgrade[] = [
+  {
+    id: 'ballistics_calibration',
+    name: '탄도 보정',
+    description: '모든 타워의 최종 피해량이 12% 증가합니다.',
+    category: 'tower',
+    effect: { stat: 'damage', value: 1.12, operation: 'multiply' },
+    icon: '◎',
+  },
+  {
+    id: 'rapid_chamber',
+    name: '고속 장전',
+    description: '현재 배치된 타워의 공격 속도가 12% 증가합니다.',
+    category: 'tower',
+    effect: { stat: 'attackSpeed', value: 1.12, operation: 'multiply' },
+    icon: '»',
+  },
+  {
+    id: 'longshot_lens',
+    name: '롱샷 렌즈',
+    description: '현재 배치된 타워의 사거리가 10% 증가합니다.',
+    category: 'tower',
+    effect: { stat: 'range', value: 1.1, operation: 'multiply' },
+    icon: '◌',
+  },
+  {
+    id: 'crit_matrix',
+    name: '크리티컬 매트릭스',
+    description: '현재 배치된 타워의 치명타 확률 +5%, 치명타 피해 +25%.',
+    category: 'tower',
+    effect: { stat: 'critChance', value: 0.05, operation: 'add' },
+    icon: '✦',
+  },
+  {
+    id: 'fortify_core',
+    name: '요새 코어',
+    description: '최대 HP +6, 즉시 6 회복.',
+    category: 'defense',
+    effect: { stat: 'maxHp', value: 6, operation: 'add' },
+    icon: '▣',
+  },
+  {
+    id: 'compound_interest',
+    name: '복리 엔진',
+    description: '즉시 80골드를 얻고, 이후 획득 골드가 12% 증가합니다.',
+    category: 'economy',
+    effect: { stat: 'gold', value: 80, operation: 'add' },
+    icon: '$',
+  },
+  {
+    id: 'tactical_cache',
+    name: '전술 보급품',
+    description: '즉시 140골드를 획득합니다.',
+    category: 'economy',
+    effect: { stat: 'gold', value: 140, operation: 'add' },
+    icon: '+',
+  },
+];
+
+function pickWaveUpgrades(): RoguelikeUpgrade[] {
+  const shuffled = [...WAVE_UPGRADE_POOL].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, 3);
+}
+
 function PlayPageContent() {
   const searchParams = useSearchParams();
   const worldId = (parseInt(searchParams.get('world') || '1', 10) || 1) as WorldId;
   const stageId = (parseInt(searchParams.get('stage') || '1', 10) || 1) as StageId;
+  const heroParam = searchParams.get('hero') || DEFAULT_HERO_ID;
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -71,6 +145,9 @@ function PlayPageContent() {
     setSpeed,
     togglePause,
     addTower,
+    addGold,
+    healHp,
+    applyUpgrade,
     reset,
   } = useGameStore();
 
@@ -94,8 +171,23 @@ function PlayPageContent() {
   const [quizContext, setQuizContext] = useState<string | null>(null);
   const [showBossWarning, setShowBossWarning] = useState(false);
   const [bossWarningType, setBossWarningType] = useState<string>('');
+  const [showUpgradePanel, setShowUpgradePanel] = useState(false);
+  const [waveUpgrades, setWaveUpgrades] = useState<RoguelikeUpgrade[]>([]);
+  const [runBonuses, setRunBonuses] = useState<RunBonuses>({ damageMultiplier: 1, goldMultiplier: 1 });
+  const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
+  const [selectedPlacedTowerId, setSelectedPlacedTowerId] = useState<string | null>(null);
+  const [heroId] = useState(() => (heroParam in HERO_DEFINITIONS ? heroParam : DEFAULT_HERO_ID));
+  const [heroCooldowns, setHeroCooldowns] = useState({ active: 0, ultimate: 0 });
+  const rewardedWaveRef = useRef<Set<number>>(new Set());
 
-  const gameLoop = useGameLoop(canvasRef);
+  const gameLoop = useGameLoop(canvasRef, {
+    onBossWarning: (bossType: EnemyType) => {
+      setBossWarningType(String(bossType).replaceAll('_', ' '));
+      setShowBossWarning(true);
+      window.setTimeout(() => setShowBossWarning(false), 2200);
+    },
+    renderWorld: false,
+  });
 
   // ── Quiz auto-trigger system ──
   const { triggerQuiz } = useQuizTrigger({
@@ -111,6 +203,11 @@ function PlayPageContent() {
 
     // Reset game state
     reset();
+    rewardedWaveRef.current.clear();
+    setRunBonuses({ damageMultiplier: 1, goldMultiplier: 1 });
+    setShowUpgradePanel(false);
+    setSelectedPlacedTowerId(null);
+    setHeroCooldowns({ active: 0, ultimate: 0 });
 
     const stage = getStage(worldId, stageId);
     setTotalWaves(stage.waves.length);
@@ -131,6 +228,7 @@ function PlayPageContent() {
       canvas.height = rows * cs;
       canvas.style.width = `${cols * cs}px`;
       canvas.style.height = `${rows * cs}px`;
+      setCanvasSize({ width: cols * cs, height: rows * cs });
 
       return cs;
     };
@@ -204,6 +302,20 @@ function PlayPageContent() {
       }
 
       if (!engine.isWaveActive() && engine.getCurrentWave() >= 0 && !engine.getIsGameOver() && !engine.isAllWavesDone()) {
+        const clearedWave = engine.getCurrentWave() + 1;
+
+        if (showUpgradePanel || showQuiz || showWaveBonus) {
+          return;
+        }
+
+        if (clearedWave % 3 === 0 && !rewardedWaveRef.current.has(clearedWave)) {
+          rewardedWaveRef.current.add(clearedWave);
+          setWaveUpgrades(pickWaveUpgrades());
+          setShowUpgradePanel(true);
+          gameLoop.pause();
+          return;
+        }
+
         // Wave ended, start next after delay
         if (waveTimerRef.current) clearTimeout(waveTimerRef.current);
         waveTimerRef.current = setTimeout(() => {
@@ -214,7 +326,7 @@ function PlayPageContent() {
     }, 500);
 
     return () => clearInterval(checkInterval);
-  }, [wave, gameLoop, isGameOver, worldId, stageId, score, setHighScore, unlockStage]);
+  }, [wave, gameLoop, isGameOver, score, setHighScore, showQuiz, showUpgradePanel, showWaveBonus, stageId, unlockStage, worldId]);
 
   // Game over handling - offer revive quiz first (like "watch ad to continue")
   useEffect(() => {
@@ -262,6 +374,39 @@ function PlayPageContent() {
     setShowQuiz(true);
   }, []);
 
+  const handleUpgradeSelect = useCallback((upgrade: RoguelikeUpgrade) => {
+    setShowUpgradePanel(false);
+
+    if (upgrade.id === 'compound_interest') {
+      addGold(80);
+      setRunBonuses((prev) => ({
+        ...prev,
+        goldMultiplier: +(prev.goldMultiplier * 1.12).toFixed(3),
+      }));
+    } else if (upgrade.id === 'tactical_cache') {
+      addGold(140);
+    } else if (upgrade.id === 'ballistics_calibration') {
+      setRunBonuses((prev) => ({
+        ...prev,
+        damageMultiplier: +(prev.damageMultiplier * 1.12).toFixed(3),
+      }));
+    } else if (upgrade.id === 'fortify_core') {
+      applyUpgrade(upgrade);
+      healHp(6);
+    } else if (upgrade.id === 'crit_matrix') {
+      applyUpgrade(upgrade);
+      applyUpgrade({
+        ...upgrade,
+        id: `${upgrade.id}_damage`,
+        effect: { stat: 'critDamage', value: 0.25, operation: 'add' },
+      });
+    } else {
+      applyUpgrade(upgrade);
+    }
+
+    gameLoop.resume();
+  }, [addGold, applyUpgrade, gameLoop, healHp]);
+
   // Sync pause state to engine
   useEffect(() => {
     if (isPaused) {
@@ -276,11 +421,142 @@ function PlayPageContent() {
     gameLoop.setSpeed(speed);
   }, [speed, gameLoop]);
 
+  useEffect(() => {
+    gameLoop.setGlobalBonuses(runBonuses.damageMultiplier, 1, runBonuses.goldMultiplier);
+  }, [gameLoop, runBonuses]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setHeroCooldowns((prev) => ({
+        active: Math.max(0, +(prev.active - 0.2).toFixed(1)),
+        ultimate: Math.max(0, +(prev.ultimate - 0.2).toFixed(1)),
+      }));
+    }, 200);
+
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const currentHero = HERO_DEFINITIONS[heroId] ?? HERO_DEFINITIONS[DEFAULT_HERO_ID];
+  const selectedPlacedTower = towers.find((tower) => tower.id === selectedPlacedTowerId) ?? null;
+
   const handleSpeedToggle = useCallback(() => {
     const speeds: GameSpeed[] = [1, 2, 3];
     const idx = speeds.indexOf(speed);
     setSpeed(speeds[(idx + 1) % speeds.length]);
   }, [speed, setSpeed]);
+
+  const castHeroActive = useCallback(() => {
+    const engine = gameLoop.getEngine();
+    if (!engine || heroCooldowns.active > 0) return;
+
+    switch (heroId) {
+      case 'aria':
+        engine.damageTopEnemies(10, 140);
+        setHeroCooldowns((prev) => ({ ...prev, active: currentHero.activeSkill.cooldown }));
+        break;
+      case 'luna': {
+        const enemies = engine.getEnemies();
+        const anchor = enemies[0];
+        if (!anchor) return;
+        engine.damageEnemiesInRadius(anchor.position, cellSize * 2.2, 180);
+        setHeroCooldowns((prev) => ({ ...prev, active: currentHero.activeSkill.cooldown }));
+        break;
+      }
+      case 'gaia':
+        engine.setInvincible(5);
+        setHeroCooldowns((prev) => ({ ...prev, active: currentHero.activeSkill.cooldown }));
+        break;
+      case 'kai':
+        engine.boostHeroPower(1.35, 1.25, 8);
+        setHeroCooldowns((prev) => ({ ...prev, active: currentHero.activeSkill.cooldown }));
+        break;
+      case 'frost':
+        engine.slowAllEnemies(0.6, 3);
+        setHeroCooldowns((prev) => ({ ...prev, active: currentHero.activeSkill.cooldown }));
+        break;
+      case 'volt':
+        engine.stunArmoredEnemies(2, 0.08);
+        setHeroCooldowns((prev) => ({ ...prev, active: currentHero.activeSkill.cooldown }));
+        break;
+      default:
+        break;
+    }
+  }, [cellSize, currentHero.activeSkill.cooldown, gameLoop, heroCooldowns.active, heroId]);
+
+  const castHeroUltimate = useCallback(() => {
+    const engine = gameLoop.getEngine();
+    if (!engine || heroCooldowns.ultimate > 0) return;
+
+    switch (heroId) {
+      case 'aria':
+        engine.damageAllEnemies(260);
+        engine.slowAllEnemies(0.5, 3);
+        break;
+      case 'luna':
+        engine.damageAllEnemies(300, 2);
+        break;
+      case 'gaia':
+        useGameStore.getState().healHp(Math.ceil(maxHp * 0.5));
+        engine.setInvincible(4);
+        break;
+      case 'kai':
+        engine.damageTopEnemies(3, 320);
+        engine.boostHeroPower(1.5, 1.35, 10);
+        break;
+      case 'frost':
+        engine.freezeAllEnemies(5, 0.2);
+        break;
+      case 'volt':
+        engine.startTeslaField(15, 55);
+        engine.stunArmoredEnemies(2, 0.12);
+        break;
+      default:
+        break;
+    }
+
+    setHeroCooldowns((prev) => ({ ...prev, ultimate: currentHero.ultimate.cooldown }));
+  }, [currentHero.ultimate.cooldown, gameLoop, heroCooldowns.ultimate, heroId, maxHp]);
+
+  const handleTowerBranchUpgrade = useCallback((path: 0 | 1 | 2) => {
+    if (!selectedPlacedTower) return;
+    const currentPaths = selectedPlacedTower.upgradePaths ?? [0, 0, 0];
+    if (!canUpgrade(selectedPlacedTower.type, currentPaths, path)) return;
+
+    const nextTier = currentPaths[path] + 1;
+    const upgrade = getUpgrade(selectedPlacedTower.type, path, nextTier as 1 | 2 | 3 | 4 | 5);
+    if (!upgrade || gold < upgrade.cost) return;
+
+    useGameStore.getState().addGold(-upgrade.cost);
+    useGameStore.setState((state) => ({
+      towers: state.towers.map((tower) => {
+        if (tower.id !== selectedPlacedTower.id) return tower;
+
+        const nextPaths: [number, number, number] = [...currentPaths] as [number, number, number];
+        nextPaths[path] = nextTier;
+        const accumulated = getAccumulatedEffects(tower.type, nextPaths);
+        const nextStats = { ...tower.stats };
+
+        if (upgrade.effect.damageAdd) nextStats.damage += upgrade.effect.damageAdd;
+        if (upgrade.effect.damageMultiply) nextStats.damage = Math.round(nextStats.damage * (1 + upgrade.effect.damageMultiply));
+        if (upgrade.effect.rangeAdd) nextStats.range += upgrade.effect.rangeAdd;
+        if (upgrade.effect.rangeMultiply) nextStats.range = +(nextStats.range * (1 + upgrade.effect.rangeMultiply)).toFixed(2);
+        if (upgrade.effect.attackSpeedAdd) nextStats.attackSpeed += upgrade.effect.attackSpeedAdd;
+        if (upgrade.effect.attackSpeedMultiply) nextStats.attackSpeed = +(nextStats.attackSpeed * (1 + upgrade.effect.attackSpeedMultiply)).toFixed(3);
+        if (upgrade.effect.critChanceAdd) nextStats.critChance = Math.min(1, nextStats.critChance + upgrade.effect.critChanceAdd);
+        if (upgrade.effect.critDamageAdd) nextStats.critDamage = +(nextStats.critDamage + upgrade.effect.critDamageAdd).toFixed(2);
+
+        return {
+          ...tower,
+          stats: nextStats,
+          upgradePaths: nextPaths,
+          specialAbilities: getActiveAbilities(tower.type, nextPaths),
+          branchBonuses: Object.fromEntries(
+            Object.entries(accumulated).filter(([, value]) => typeof value === 'number')
+          ),
+        };
+      }),
+    }));
+  }, [gold, selectedPlacedTower]);
 
   const handleTowerSelect = useCallback((type: TowerType) => {
     setIsRandomTower(false);
@@ -354,12 +630,17 @@ function PlayPageContent() {
             level: 1,
             mergeCount: 0,
             targetingMode: 'first',
+            upgradePaths: [0, 0, 0],
+            specialAbilities: [],
+            branchBonuses: {},
           };
 
           addTower(newTower);
           useGameStore.getState().addGold(-RANDOM_TOWER_COST);
           setSelectedTower(null);
           setIsRandomTower(false);
+          setSelectedPlacedTowerId(newTower.id);
+          gameLoop.selectedTowerId.current = newTower.id;
           gameLoop.placementInfoRef.current = null;
 
           // Show notification
@@ -384,11 +665,16 @@ function PlayPageContent() {
           level: 1,
           mergeCount: 0,
           targetingMode: 'first',
+          upgradePaths: [0, 0, 0],
+          specialAbilities: [],
+          branchBonuses: {},
         };
 
         addTower(newTower);
         useGameStore.getState().addGold(-def.cost);
         setSelectedTower(null);
+        setSelectedPlacedTowerId(newTower.id);
+        gameLoop.selectedTowerId.current = newTower.id;
         gameLoop.placementInfoRef.current = null;
         return;
       }
@@ -398,8 +684,10 @@ function PlayPageContent() {
       );
       if (tappedTower) {
         gameLoop.selectedTowerId.current = tappedTower.id;
+        setSelectedPlacedTowerId(tappedTower.id);
       } else {
         gameLoop.selectedTowerId.current = null;
+        setSelectedPlacedTowerId(null);
       }
     },
     [selectedTower, isRandomTower, gold, towers, addTower, gameLoop]
@@ -493,6 +781,11 @@ function PlayPageContent() {
     reset();
     setShowGameOver(false);
     setShowStageClear(false);
+    setShowUpgradePanel(false);
+    rewardedWaveRef.current.clear();
+    setRunBonuses({ damageMultiplier: 1, goldMultiplier: 1 });
+    setSelectedPlacedTowerId(null);
+    setHeroCooldowns({ active: 0, ultimate: 0 });
     stageLoadedRef.current = false;
 
     setTimeout(() => {
@@ -512,6 +805,7 @@ function PlayPageContent() {
       canvas.height = rows * cs;
       canvas.style.width = `${cols * cs}px`;
       canvas.style.height = `${rows * cs}px`;
+      setCanvasSize({ width: cols * cs, height: rows * cs });
 
       gameLoop.loadStage(stage.mapData, stage.waves, cs);
       const engine = gameLoop.getEngine();
@@ -525,7 +819,7 @@ function PlayPageContent() {
         gameLoop.startNextWave();
       }, 3000);
     }, 100);
-  }, [reset, gameLoop, worldId, stageId]);
+  }, [gameLoop, reset, stageId, worldId]);
 
   return (
     <div className="h-dvh flex flex-col bg-[#0F172A] relative overflow-hidden game-area">
@@ -585,14 +879,28 @@ function PlayPageContent() {
       <div ref={containerRef} className="flex-1 relative flex items-center justify-center bg-[#0d1520]">
         {/* Canvas wrapper with glow border + vignette */}
         <div className="relative">
+          {canvasSize.width > 0 && canvasSize.height > 0 && (
+            <div
+              className="absolute inset-0 rounded overflow-hidden"
+              style={{ width: canvasSize.width, height: canvasSize.height }}
+            >
+              <ThreeBattlefield
+                width={canvasSize.width}
+                height={canvasSize.height}
+                cellSize={cellSize}
+                getEngine={gameLoop.getEngine}
+                selectedTowerId={selectedPlacedTowerId}
+              />
+            </div>
+          )}
           <canvas
             ref={canvasRef}
-            className="block cursor-pointer touch-none rounded"
+            className="relative z-10 block cursor-pointer touch-none rounded"
             onClick={handleCanvasTap}
             onMouseMove={handleCanvasMouseMove}
             onMouseLeave={handleCanvasMouseLeave}
             onTouchMove={handleCanvasTouchMove}
-            style={{ imageRendering: 'pixelated' }}
+            style={{ imageRendering: 'pixelated', background: 'transparent' }}
           />
           <div className="canvas-vignette rounded" />
           <div className="canvas-glow-border" />
@@ -678,6 +986,83 @@ function PlayPageContent() {
             <div className="absolute inset-0 btn-shine-overlay opacity-40 pointer-events-none" />
           </motion.button>
         </div>
+
+        <div className="px-3 py-2 border-b border-slate-800/40">
+          <div className="flex items-center gap-2 rounded-2xl bg-slate-900/50 px-3 py-2">
+            <div
+              className="w-10 h-10 rounded-xl flex items-center justify-center text-xl font-black"
+              style={{
+                background: `linear-gradient(135deg, ${currentHero.color}, rgba(255,255,255,0.15))`,
+                boxShadow: `0 0 16px ${currentHero.color}44`,
+              }}
+            >
+              {currentHero.icon}
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="text-[10px] uppercase tracking-[0.2em] text-slate-400">Hero Support</div>
+              <div className="text-sm font-bold text-white truncate">{currentHero.nameKr}</div>
+            </div>
+            <motion.button
+              whileTap={{ scale: 0.96 }}
+              onClick={castHeroActive}
+              disabled={heroCooldowns.active > 0}
+              className="rounded-xl px-3 py-2 text-[11px] font-bold text-white disabled:opacity-40"
+              style={{ background: 'linear-gradient(135deg, rgba(59,130,246,0.8), rgba(14,165,233,0.8))' }}
+            >
+              {heroCooldowns.active > 0 ? `${heroCooldowns.active.toFixed(1)}s` : 'ACTIVE'}
+            </motion.button>
+            <motion.button
+              whileTap={{ scale: 0.96 }}
+              onClick={castHeroUltimate}
+              disabled={heroCooldowns.ultimate > 0}
+              className="rounded-xl px-3 py-2 text-[11px] font-bold text-white disabled:opacity-40"
+              style={{ background: 'linear-gradient(135deg, rgba(168,85,247,0.82), rgba(236,72,153,0.82))' }}
+            >
+              {heroCooldowns.ultimate > 0 ? `${heroCooldowns.ultimate.toFixed(1)}s` : 'ULT'}
+            </motion.button>
+          </div>
+        </div>
+
+        {selectedPlacedTower && (
+          <div className="px-3 py-2 border-b border-slate-800/40 bg-slate-950/40">
+            <div className="flex items-center justify-between mb-2">
+              <div>
+                <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Tower Paths</div>
+                <div className="text-sm font-bold text-white">{TOWER_DEFINITIONS[selectedPlacedTower.type]?.nameKr ?? selectedPlacedTower.type}</div>
+              </div>
+              <div className="text-[11px] text-amber-300 font-bold">{gold}G</div>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {getTowerPathInfos(selectedPlacedTower.type).map((pathInfo) => {
+                const currentTier = selectedPlacedTower.upgradePaths?.[pathInfo.path] ?? 0;
+                const pathUpgrades = getUpgradePath(selectedPlacedTower.type, pathInfo.path);
+                const nextUpgrade = pathUpgrades[currentTier];
+                const allowed = canUpgrade(selectedPlacedTower.type, selectedPlacedTower.upgradePaths ?? [0, 0, 0], pathInfo.path);
+                const affordable = !!nextUpgrade && gold >= nextUpgrade.cost;
+
+                return (
+                  <button
+                    key={`${selectedPlacedTower.id}-${pathInfo.path}`}
+                    onClick={() => handleTowerBranchUpgrade(pathInfo.path)}
+                    disabled={!nextUpgrade || !allowed || !affordable}
+                    className="rounded-2xl border px-2 py-2 text-left disabled:opacity-40"
+                    style={{
+                      borderColor: allowed ? 'rgba(148,163,184,0.24)' : 'rgba(71,85,105,0.2)',
+                      background: 'linear-gradient(180deg, rgba(15,23,42,0.75), rgba(15,23,42,0.45))',
+                    }}
+                  >
+                    <div className="flex items-center justify-between text-xs mb-1">
+                      <span className="text-slate-200 font-bold">{pathInfo.name}</span>
+                      <span className="text-indigo-300">{currentTier}/5</span>
+                    </div>
+                    <div className="text-[10px] text-slate-500 mb-2">{nextUpgrade ? nextUpgrade.name : 'MAXED'}</div>
+                    <div className="text-[10px] text-amber-300 font-bold">{nextUpgrade ? `${nextUpgrade.cost}G` : 'LOCK'}</div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Tower Selection Bar */}
         <div className="overflow-x-auto scrollbar-hide">
@@ -871,6 +1256,13 @@ function PlayPageContent() {
       <WordQuizModal
         isOpen={showQuiz}
         onClose={() => setShowQuiz(false)}
+      />
+
+      <UpgradePanel
+        isOpen={showUpgradePanel}
+        upgrades={waveUpgrades}
+        onSelect={handleUpgradeSelect}
+        waveNumber={Math.max(1, wave)}
       />
 
       {/* Stage Clear Modal */}

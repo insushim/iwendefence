@@ -17,6 +17,7 @@ import type {
   Tower,
   Enemy,
   WorldId,
+  EnemyType,
 } from '../types/game';
 
 // ── Return type ─────────────────────────────────────────────
@@ -54,14 +55,23 @@ export interface UseGameLoopReturn {
   placementInfoRef: React.MutableRefObject<PlacementInfo | null>;
 }
 
+interface UseGameLoopOptions {
+  onBossWarning?: (bossType: EnemyType, waveIndex: number) => void;
+  renderWorld?: boolean;
+}
+
 // ── Hook ────────────────────────────────────────────────────
 
-export function useGameLoop(canvasRef: React.RefObject<HTMLCanvasElement | null>): UseGameLoopReturn {
+export function useGameLoop(
+  canvasRef: React.RefObject<HTMLCanvasElement | null>,
+  options?: UseGameLoopOptions
+): UseGameLoopReturn {
   const engineRef = useRef<GameEngine | null>(null);
   const soundRef = useRef<SoundEngine | null>(null);
   const selectedTowerId = useRef<string | null>(null);
   const placementInfoRef = useRef<PlacementInfo | null>(null);
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+  const optionsRef = useRef<UseGameLoopOptions | undefined>(options);
 
   // Zustand store actions
   const addGold = useGameStore((s) => s.addGold);
@@ -70,7 +80,10 @@ export function useGameLoop(canvasRef: React.RefObject<HTMLCanvasElement | null>
   const removeEnemy = useGameStore((s) => s.removeEnemy);
   const nextWave = useGameStore((s) => s.nextWave);
   const setGameOver = useGameStore((s) => s.setGameOver);
-  const setCombo = useGameStore((s) => s.setCombo);
+
+  useEffect(() => {
+    optionsRef.current = options;
+  }, [options]);
 
   // ── Initialize engine ─────────────────────────────────────
 
@@ -92,7 +105,7 @@ export function useGameLoop(canvasRef: React.RefObject<HTMLCanvasElement | null>
         removeEnemy(enemy.id);
         soundRef.current?.playSFX('enemyDeath');
       },
-      onWaveComplete: (waveIndex: number) => {
+      onWaveComplete: () => {
         nextWave();
         soundRef.current?.playSFX('waveClear');
       },
@@ -103,8 +116,11 @@ export function useGameLoop(canvasRef: React.RefObject<HTMLCanvasElement | null>
         setGameOver();
         soundRef.current?.stopBGM();
       },
-      onScoreAdd: (_points: number) => {
+      onScoreAdd: () => {
         // Score is tracked in engine; store sync happens via getScore()
+      },
+      onBossWarning: (bossType, waveIndex) => {
+        optionsRef.current?.onBossWarning?.(bossType, waveIndex);
       },
     };
 
@@ -120,8 +136,7 @@ export function useGameLoop(canvasRef: React.RefObject<HTMLCanvasElement | null>
       engine.stop();
       sound.stopBGM();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [addGold, healHp, nextWave, removeEnemy, setGameOver, takeDamage]);
 
   // ── Bind canvas + renderer + touch events ─────────────────
 
@@ -136,7 +151,7 @@ export function useGameLoop(canvasRef: React.RefObject<HTMLCanvasElement | null>
 
     // Set up render callback
     engine.setRenderCallback((ctx: CanvasRenderingContext2D, eng: GameEngine) => {
-      renderGame(ctx, eng, selectedTowerId.current, placementInfoRef.current);
+      renderGame(ctx, eng, selectedTowerId.current, placementInfoRef.current, optionsRef.current?.renderWorld ?? true);
     });
 
     // ── Touch / Click handlers ────────────────────────────

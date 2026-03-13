@@ -5,6 +5,7 @@ import * as THREE from 'three';
 
 import type { GameEngine } from '@/shared/lib/gameEngine';
 import type { Enemy, Tower, TowerType } from '@/shared/types/game';
+import type { PlacementInfo } from '@/shared/lib/renderer';
 
 interface ThreeBattlefieldProps {
   width: number;
@@ -12,6 +13,7 @@ interface ThreeBattlefieldProps {
   cellSize: number;
   getEngine: () => GameEngine | null;
   selectedTowerId: string | null;
+  placementInfo: PlacementInfo | null;
 }
 
 const TOWER_COLORS: Record<string, number> = {
@@ -139,6 +141,50 @@ function createMagicTower(color: number): THREE.Group {
   return group;
 }
 
+function createElementalPylon(color: number, topper: 'crystal' | 'coil' | 'orb'): THREE.Group {
+  const group = new THREE.Group();
+  const pedestal = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.38, 0.18, 10), standardMaterial(0x1f2937));
+  pedestal.position.y = 0.09;
+  group.add(pedestal);
+
+  const column = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.18, 0.62, 10), standardMaterial(0x475569));
+  column.position.y = 0.45;
+  group.add(column);
+
+  if (topper === 'crystal') {
+    const crystal = new THREE.Mesh(new THREE.OctahedronGeometry(0.24, 0), standardMaterial(color, color, 0.6));
+    crystal.position.y = 0.95;
+    crystal.scale.set(0.8, 1.2, 0.8);
+    group.add(crystal);
+  } else if (topper === 'coil') {
+    const coil = new THREE.Mesh(new THREE.TorusKnotGeometry(0.15, 0.035, 50, 8), standardMaterial(color, color, 0.7));
+    coil.position.y = 0.93;
+    coil.rotation.x = Math.PI / 2;
+    group.add(coil);
+  } else {
+    const orb = new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 16), standardMaterial(0xffffff, color, 0.8));
+    orb.position.y = 0.96;
+    group.add(orb);
+  }
+  return group;
+}
+
+function createMineTower(color: number): THREE.Group {
+  const group = new THREE.Group();
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.4, 0.16, 10), standardMaterial(0x3f2c16));
+  base.position.y = 0.08;
+  group.add(base);
+
+  const crate = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.34, 0.42), standardMaterial(0x7c4a19));
+  crate.position.y = 0.33;
+  group.add(crate);
+
+  const nugget = new THREE.Mesh(new THREE.IcosahedronGeometry(0.14, 0), standardMaterial(color, color, 0.7));
+  nugget.position.y = 0.63;
+  group.add(nugget);
+  return group;
+}
+
 function createCannonTower(color: number): THREE.Group {
   const group = new THREE.Group();
   const darkMetal = standardMaterial(0x475569);
@@ -247,11 +293,26 @@ function createTowerMesh(type: TowerType, selected: boolean): THREE.Group {
     case 'FLAME':
       group = createCannonTower(color);
       break;
+    case 'ICE':
+      group = createElementalPylon(color, 'crystal');
+      break;
+    case 'LIGHTNING':
+      group = createElementalPylon(color, 'coil');
+      break;
+    case 'POISON':
+    case 'HEALER':
+    case 'PHOENIX':
+    case 'VOID':
+      group = createElementalPylon(color, 'orb');
+      break;
     case 'SNIPER':
       group = createSniperTower(color);
       break;
     case 'BARRICADE':
       group = createWallTower(color);
+      break;
+    case 'GOLDMINE':
+      group = createMineTower(color);
       break;
     default:
       group = createSupportTower(color);
@@ -297,6 +358,27 @@ function createBeastEnemy(color: number, elite: boolean): THREE.Group {
   tail.rotation.z = Math.PI / 2;
   tail.position.set(-0.34, 0.34, 0);
   group.add(tail);
+  return group;
+}
+
+function createSlimeEnemy(color: number, elite: boolean): THREE.Group {
+  const group = new THREE.Group();
+  const mat = standardMaterial(color, elite ? 0xfacc15 : color, elite ? 0.22 : 0.05);
+  const blob = new THREE.Mesh(new THREE.SphereGeometry(0.24, 18, 18), mat);
+  blob.position.y = 0.22;
+  blob.scale.set(1.2, 0.85, 1.15);
+  group.add(blob);
+
+  const topBlob = new THREE.Mesh(new THREE.SphereGeometry(0.11, 14, 14), mat);
+  topBlob.position.set(0.02, 0.48, 0);
+  group.add(topBlob);
+
+  const eyes = new THREE.Mesh(new THREE.SphereGeometry(0.025, 8, 8), standardMaterial(0xffffff));
+  eyes.position.set(-0.07, 0.26, 0.18);
+  group.add(eyes);
+  const eyes2 = eyes.clone();
+  eyes2.position.x = 0.07;
+  group.add(eyes2);
   return group;
 }
 
@@ -349,6 +431,8 @@ function createEnemyMesh(enemy: Enemy): THREE.Group {
 
   if (['DRAGON', 'LICH_KING', 'DEMON_LORD', 'HYDRA', 'WORD_DESTROYER'].includes(enemy.type)) {
     group = createBossEnemy(color, !!enemy.isElite);
+  } else if (enemy.type === 'SLIME') {
+    group = createSlimeEnemy(color, !!enemy.isElite);
   } else if (['BAT', 'HARPY', 'DRAGON_WHELP', 'GARGOYLE', 'PHOENIX_CHICK', 'WYVERN'].includes(enemy.type)) {
     group = createFlyingEnemy(color, !!enemy.isElite);
   } else if (['WOLF', 'SLIME', 'IRON_TURTLE'].includes(enemy.type)) {
@@ -408,6 +492,7 @@ export default function ThreeBattlefield({
   cellSize,
   getEngine,
   selectedTowerId,
+  placementInfo,
 }: ThreeBattlefieldProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
 
@@ -451,7 +536,8 @@ export default function ThreeBattlefield({
     const towerGroup = new THREE.Group();
     const enemyGroup = new THREE.Group();
     const projectileGroup = new THREE.Group();
-    scene.add(mapGroup, towerGroup, enemyGroup, projectileGroup);
+    const overlayGroup = new THREE.Group();
+    scene.add(mapGroup, towerGroup, enemyGroup, projectileGroup, overlayGroup);
 
     const ground = new THREE.Mesh(
       new THREE.PlaneGeometry(22, 15),
@@ -466,9 +552,45 @@ export default function ThreeBattlefield({
     ground.receiveShadow = true;
     scene.add(ground);
 
+    const backWall = new THREE.Mesh(
+      new THREE.PlaneGeometry(22, 8),
+      new THREE.MeshBasicMaterial({ color: 0x0b223d, transparent: true, opacity: 0.75 })
+    );
+    backWall.position.set(7.5, 4.2, -2.6);
+    scene.add(backWall);
+
+    const sideGlow = new THREE.Mesh(
+      new THREE.PlaneGeometry(4, 14),
+      new THREE.MeshBasicMaterial({ color: 0x0f766e, transparent: true, opacity: 0.18, side: THREE.DoubleSide })
+    );
+    sideGlow.position.set(-1.5, 2.2, 4.5);
+    sideGlow.rotation.y = Math.PI / 2.8;
+    scene.add(sideGlow);
+    const rightGlow = sideGlow.clone();
+    rightGlow.position.x = 16.5;
+    rightGlow.rotation.y = -Math.PI / 2.8;
+    scene.add(rightGlow);
+
     const towerMeshes = new Map<string, THREE.Group>();
     const enemyMeshes = new Map<string, THREE.Group>();
     const projectileMeshes = new Map<string, THREE.Mesh>();
+    const buildPads: THREE.Mesh[] = [];
+    const placementRing = new THREE.Mesh(
+      new THREE.RingGeometry(0.36, 0.47, 32),
+      new THREE.MeshBasicMaterial({ color: 0x22c55e, transparent: true, opacity: 0.55, side: THREE.DoubleSide })
+    );
+    placementRing.rotation.x = -Math.PI / 2;
+    placementRing.visible = false;
+    overlayGroup.add(placementRing);
+
+    const placementPlate = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.9, 0.9),
+      new THREE.MeshBasicMaterial({ color: 0x22c55e, transparent: true, opacity: 0.18, side: THREE.DoubleSide })
+    );
+    placementPlate.rotation.x = -Math.PI / 2;
+    placementPlate.position.y = 0.081;
+    placementPlate.visible = false;
+    overlayGroup.add(placementPlate);
 
     let frame = 0;
     let raf = 0;
@@ -485,21 +607,53 @@ export default function ThreeBattlefield({
           tile.position.set(col + 0.5, cell === 1 ? 0.04 : 0.03, rows - row - 0.5);
           mapGroup.add(tile);
 
+          if (cell === 1) {
+            const stripe = new THREE.Mesh(
+              new THREE.PlaneGeometry(0.78, 0.78),
+              new THREE.MeshBasicMaterial({ color: 0xe2e8f0, transparent: true, opacity: 0.11 })
+            );
+            stripe.rotation.x = -Math.PI / 2;
+            stripe.position.set(col + 0.5, 0.085, rows - row - 0.5);
+            mapGroup.add(stripe);
+          }
+
           if (cell !== 1) {
             const pad = new THREE.Mesh(
               new THREE.PlaneGeometry(0.7, 0.7),
               new THREE.MeshBasicMaterial({
                 color: 0x34d399,
                 transparent: true,
-                opacity: 0.08,
+                opacity: 0.14,
               })
             );
             pad.rotation.x = -Math.PI / 2;
             pad.position.set(col + 0.5, 0.071, rows - row - 0.5);
             mapGroup.add(pad);
+            buildPads.push(pad);
           }
         }
       }
+    };
+
+    const syncPlacement = () => {
+      if (!placementInfo) {
+        placementRing.visible = false;
+        placementPlate.visible = false;
+        return;
+      }
+
+      const rows = getEngine()?.getMapData()?.grid.length ?? 10;
+      const x = placementInfo.col + 0.5;
+      const z = rows - placementInfo.row - 0.5;
+      const color = placementInfo.canPlace ? 0x22c55e : 0xef4444;
+
+      (placementRing.material as THREE.MeshBasicMaterial).color.setHex(color);
+      (placementPlate.material as THREE.MeshBasicMaterial).color.setHex(color);
+      placementRing.scale.setScalar(Math.max(1, placementInfo.range / 3));
+      placementRing.position.set(x, 0.08, z);
+      placementPlate.position.set(x, 0.081, z);
+      placementRing.visible = true;
+      placementPlate.visible = true;
     };
 
     const syncTowers = (towers: Tower[]) => {
@@ -600,6 +754,11 @@ export default function ThreeBattlefield({
         syncTowers(engine.getTowers());
         syncEnemies(engine.getEnemies());
         syncProjectiles(engine);
+        syncPlacement();
+        for (const pad of buildPads) {
+          const pulse = 0.11 + (Math.sin(frame * 0.05 + pad.position.x) + 1) * 0.025;
+          (pad.material as THREE.MeshBasicMaterial).opacity = pulse;
+        }
       }
 
       renderer.render(scene, camera);
@@ -613,7 +772,7 @@ export default function ThreeBattlefield({
       renderer.dispose();
       host.innerHTML = '';
     };
-  }, [cellSize, getEngine, height, selectedTowerId, width]);
+  }, [cellSize, getEngine, height, placementInfo, selectedTowerId, width]);
 
   return <div ref={hostRef} className="absolute inset-0 pointer-events-none rounded overflow-hidden" />;
 }

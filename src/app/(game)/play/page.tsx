@@ -162,6 +162,7 @@ function PlayPageContent() {
   const [showQuiz, setShowQuiz] = useState(false);
   const [cellSize, setCellSize] = useState(60);
   const [totalWaves, setTotalWaves] = useState(0);
+  const [placementPreview, setPlacementPreview] = useState<PlacementInfo | null>(null);
 
   // ── New: Quiz placement system (replacing ads) ──
   const [showWaveBonus, setShowWaveBonus] = useState(false);
@@ -642,6 +643,7 @@ function PlayPageContent() {
           setSelectedPlacedTowerId(newTower.id);
           gameLoop.selectedTowerId.current = newTower.id;
           gameLoop.placementInfoRef.current = null;
+          setPlacementPreview(null);
 
           // Show notification
           setRandomTowerNotif({
@@ -676,6 +678,7 @@ function PlayPageContent() {
         setSelectedPlacedTowerId(newTower.id);
         gameLoop.selectedTowerId.current = newTower.id;
         gameLoop.placementInfoRef.current = null;
+        setPlacementPreview(null);
         return;
       }
 
@@ -700,6 +703,7 @@ function PlayPageContent() {
       const engine = gameLoop.getEngine();
       if (!canvas || !engine || (!selectedTower && !isRandomTower)) {
         gameLoop.placementInfoRef.current = null;
+        setPlacementPreview(null);
         return;
       }
 
@@ -731,13 +735,15 @@ function PlayPageContent() {
       );
       const canPlace = gridValue !== 1 && !existingTower && gold >= cost;
 
-      gameLoop.placementInfoRef.current = {
+      const previewInfo = {
         towerType: previewType,
         row,
         col,
         range,
         canPlace,
       };
+      gameLoop.placementInfoRef.current = previewInfo;
+      setPlacementPreview(previewInfo);
     },
     [selectedTower, isRandomTower, towers, gold, gameLoop]
   );
@@ -759,12 +765,14 @@ function PlayPageContent() {
 
   const handleCanvasMouseLeave = useCallback(() => {
     gameLoop.placementInfoRef.current = null;
+    setPlacementPreview(null);
   }, [gameLoop]);
 
   // Clear placement info when selectedTower changes or is deselected
   useEffect(() => {
     if (!selectedTower && !isRandomTower) {
       gameLoop.placementInfoRef.current = null;
+      setPlacementPreview(null);
     }
   }, [selectedTower, isRandomTower, gameLoop]);
 
@@ -890,6 +898,7 @@ function PlayPageContent() {
                 cellSize={cellSize}
                 getEngine={gameLoop.getEngine}
                 selectedTowerId={selectedPlacedTowerId}
+                placementInfo={placementPreview}
               />
             </div>
           )}

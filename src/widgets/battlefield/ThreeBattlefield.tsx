@@ -924,6 +924,22 @@ function applyTowerIdleMotion(mesh: THREE.Group, tower: Tower, frame: number): v
   }
 }
 
+function applyEnemyHitFlash(group: THREE.Group, amount: number): void {
+  group.traverse((child) => {
+    const mesh = child as THREE.Mesh;
+    if (!('material' in mesh)) return;
+    const material = mesh.material;
+    if (Array.isArray(material)) return;
+    if (material instanceof THREE.MeshStandardMaterial) {
+      material.emissive.lerp(new THREE.Color(0xffffff), amount * 0.55);
+      material.emissiveIntensity = Math.max(material.emissiveIntensity, amount * 1.8);
+    }
+    if (material instanceof THREE.MeshBasicMaterial) {
+      material.opacity = Math.min(1, material.opacity + amount * 0.12);
+    }
+  });
+}
+
 function spawnBurst(target: THREE.Object3D, parent: THREE.Group, effects: BurstEffect[], color: number, count: number, upward = 1.2): void {
   const burst = new THREE.Group();
   for (let i = 0; i < count; i++) {
@@ -1088,10 +1104,13 @@ export default function ThreeBattlefield({
     const enemyMeshes = new Map<string, THREE.Group>();
     const projectileMeshes = new Map<string, THREE.Group>();
     const projectilePrev = new Map<string, THREE.Vector3>();
+    const projectileTargets = new Map<string, string>();
     const tilePickMeshes: THREE.Mesh[] = [];
     const buildPads: THREE.Mesh[] = [];
     const towerSpawnFrames = new Map<string, number>();
+    const towerFireFrames = new Map<string, number>();
     const enemySpawnFrames = new Map<string, number>();
+    const enemyHitFrames = new Map<string, number>();
     const effects: BurstEffect[] = [];
     const buildPulses: BuildPulseEffect[] = [];
     let placementGhost: THREE.Group | null = null;
@@ -1428,9 +1447,14 @@ export default function ThreeBattlefield({
         const bornAt = towerSpawnFrames.get(tower.id) ?? frame;
         const appear = Math.min(1, (frame - bornAt) / 18);
         const entrancePop = 1 + Math.max(0, 1 - appear) * 0.38;
+        const fireAt = towerFireFrames.get(tower.id) ?? -999;
+        const fireProgress = Math.max(0, 1 - (frame - fireAt) / 10);
+        const recoilLift = fireProgress * 0.08;
+        const recoilScale = 1 + fireProgress * 0.14;
         mesh.position.set(tower.position.col + 0.5, (1 - appear) * 0.5, rows - tower.position.row - 0.5);
         mesh.rotation.y += 0.01 + tower.grade * 0.002;
-        mesh.scale.setScalar((0.72 + appear * 0.28) * (1 + tower.grade * 0.06) * entrancePop);
+        mesh.position.y += recoilLift;
+        mesh.scale.setScalar((0.72 + appear * 0.28) * (1 + tower.grade * 0.06) * entrancePop * recoilScale);
         applyTowerIdleMotion(mesh, tower, frame);
 
         const hasRing = mesh.children.some((child) => child.userData.selectionRing);
@@ -1471,6 +1495,12 @@ export default function ThreeBattlefield({
         updateEnemyMesh(mesh, enemy, frame * 0.016);
         mesh.scale.setScalar((BOSS_TYPES.has(enemy.type) ? 1.55 : 1) * (0.78 + appear * 0.22));
         mesh.userData.type = enemy.type;
+        const hitAt = enemyHitFrames.get(enemy.id) ?? -999;
+        const hitProgress = Math.max(0, 1 - (frame - hitAt) / 9);
+        if (hitProgress > 0) {
+          applyEnemyHitFlash(mesh, hitProgress);
+          mesh.scale.multiplyScalar(1 + hitProgress * 0.08);
+        }
 
         if (BOSS_TYPES.has(enemy.type)) {
           const enemyColor = ENEMY_COLORS[enemy.type] ?? 0xef4444;
@@ -1512,7 +1542,9 @@ export default function ThreeBattlefield({
           mesh = createProjectileMesh(TOWER_COLORS[projectile.towerType] ?? 0xffffff);
           projectileMeshes.set(projectile.id, mesh);
           projectileGroup.add(mesh);
+          towerFireFrames.set(projectile.sourceId, frame);
         }
+        projectileTargets.set(projectile.id, projectile.targetId);
 
         const pos = worldPositionFromCanvas(projectile.position.x, projectile.position.y, cellSize, rows);
         const prev = projectilePrev.get(projectile.id) ?? pos.clone();
@@ -1529,10 +1561,13 @@ export default function ThreeBattlefield({
         if (seen.has(id)) continue;
         const mat = (mesh.children[0] as THREE.Mesh | undefined)?.material;
         const color = mat instanceof THREE.MeshStandardMaterial ? mat.color.getHex() : 0xffffff;
+        const targetId = projectileTargets.get(id);
+        if (targetId) enemyHitFrames.set(targetId, frame);
         spawnBurst(mesh, burstGroup, effects, color, 4, 0.8);
         projectileGroup.remove(mesh);
         projectileMeshes.delete(id);
         projectilePrev.delete(id);
+        projectileTargets.delete(id);
       }
     };
 

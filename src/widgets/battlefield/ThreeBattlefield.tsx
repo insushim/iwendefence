@@ -629,6 +629,16 @@ function createArcherTower(color: number): THREE.Group {
   balcony.position.y = 0.92;
   group.add(balcony);
 
+  for (const x of [-0.17, 0.17]) {
+    const support = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.42, 0.05), wood);
+    support.position.set(x, 0.88, 0.18);
+    group.add(support);
+  }
+
+  const banner = new THREE.Mesh(new THREE.PlaneGeometry(0.16, 0.22), basicGlow(color, 0.42));
+  banner.position.set(-0.18, 1.06, 0.2);
+  group.add(banner);
+
   addTowerShadow(group);
   return group;
 }
@@ -700,6 +710,11 @@ function createHealerTower(color: number): THREE.Group {
   const crossH = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.08, 0.08), standardMaterial(0xffffff, color, 0.5));
   crossH.position.y = 0.98;
   group.add(crossH);
+
+  const petals = new THREE.Mesh(new THREE.TorusGeometry(0.16, 0.02, 8, 20), standardMaterial(0xffffff, color, 0.55));
+  petals.rotation.y = Math.PI / 2;
+  petals.position.y = 0.7;
+  group.add(petals);
 
   addTowerShadow(group);
   return group;
@@ -791,6 +806,14 @@ function createCannonTower(color: number): THREE.Group {
   muzzle.rotation.y = Math.PI / 2;
   muzzle.position.set(0.62, 0.5, 0);
   group.add(muzzle);
+
+  const rearBrace = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.16, 0.22), standardMaterial(0x7c4a19));
+  rearBrace.position.set(-0.05, 0.34, 0);
+  group.add(rearBrace);
+
+  const sidePlate = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.22, 0.48), accent);
+  sidePlate.position.set(0.05, 0.34, 0);
+  group.add(sidePlate);
   addTowerShadow(group);
   return group;
 }
@@ -813,6 +836,21 @@ function createSniperTower(color: number): THREE.Group {
   scope.rotation.z = Math.PI / 2;
   scope.position.set(0.26, 0.98, 0);
   group.add(scope);
+
+  const standLeft = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.46, 0.04), metal);
+  standLeft.position.set(-0.08, 0.23, 0.12);
+  standLeft.rotation.z = 0.18;
+  group.add(standLeft);
+
+  const standRight = standLeft.clone();
+  standRight.position.z = -0.12;
+  standRight.rotation.z = -0.18;
+  group.add(standRight);
+
+  const cheekPad = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.06, 0.08), standardMaterial(0x1f2937));
+  cheekPad.position.set(0.02, 0.9, 0);
+  group.add(cheekPad);
+  addTowerShadow(group);
   return group;
 }
 
@@ -1372,6 +1410,35 @@ export default function ThreeBattlefield({
       rail.position.set(x, 0.08, 4.5);
       scene.add(rail);
     }
+
+    for (let i = 0; i < cols; i++) {
+      for (const z of [-1.75, 10.75]) {
+        const cliff = new THREE.Mesh(
+          new THREE.BoxGeometry(0.94, 1.1 + (i % 3) * 0.22, 0.62),
+          new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.96, metalness: 0.02 })
+        );
+        cliff.position.set(i + 0.5, -0.42, z);
+        scene.add(cliff);
+      }
+    }
+
+    for (let i = 0; i < rows; i++) {
+      for (const x of [-1.75, 16.75]) {
+        const cliff = new THREE.Mesh(
+          new THREE.BoxGeometry(0.62, 0.98 + (i % 2) * 0.28, 0.94),
+          new THREE.MeshStandardMaterial({ color: 0x273449, roughness: 0.95, metalness: 0.02 })
+        );
+        cliff.position.set(x, -0.4, rows - i - 0.5);
+        scene.add(cliff);
+      }
+    }
+
+    const frontLip = new THREE.Mesh(
+      new THREE.BoxGeometry(18.8, 0.42, 0.9),
+      new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.94, metalness: 0.02 })
+    );
+    frontLip.position.set(7.5, -0.12, 10.95);
+    scene.add(frontLip);
 
     const towerMeshes = new Map<string, THREE.Group>();
     const enemyMeshes = new Map<string, THREE.Group>();

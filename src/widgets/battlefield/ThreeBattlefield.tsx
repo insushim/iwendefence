@@ -352,6 +352,30 @@ function createBackdropTexture(theme: (typeof ENVIRONMENT_VISUALS)[EnvironmentTy
   });
 }
 
+function createRoundedRectShape(width: number, height: number, radius: number): THREE.Shape {
+  const x = -width / 2;
+  const y = -height / 2;
+  const shape = new THREE.Shape();
+  shape.moveTo(x + radius, y);
+  shape.lineTo(x + width - radius, y);
+  shape.quadraticCurveTo(x + width, y, x + width, y + radius);
+  shape.lineTo(x + width, y + height - radius);
+  shape.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+  shape.lineTo(x + radius, y + height);
+  shape.quadraticCurveTo(x, y + height, x, y + height - radius);
+  shape.lineTo(x, y + radius);
+  shape.quadraticCurveTo(x, y, x + radius, y);
+  return shape;
+}
+
+function createRoundedPlateGeometry(width: number, height: number, depth: number, radius: number): THREE.ExtrudeGeometry {
+  return new THREE.ExtrudeGeometry(createRoundedRectShape(width, height, radius), {
+    depth,
+    bevelEnabled: false,
+    curveSegments: 10,
+  });
+}
+
 function applyGhostMaterial(group: THREE.Group, color: number, canPlace: boolean): void {
   group.traverse((child) => {
     const mesh = child as THREE.Mesh;
@@ -1811,20 +1835,14 @@ function updateEnemyMesh(group: THREE.Group, enemy: Enemy, time: number): void {
 }
 
 function createMapTile(cell: number, pathTexture?: THREE.Texture, buildTexture?: THREE.Texture): THREE.Mesh {
-  const isPath = cell === 1;
-  const isBuild = cell !== 1;
-  const material = new THREE.MeshStandardMaterial({
-    color: isPath ? 0x7c8ea3 : isBuild ? 0x25463e : 0x17332d,
-    map: isPath ? pathTexture ?? null : isBuild ? buildTexture ?? null : null,
-    roughness: isPath ? 0.78 : 0.94,
-    metalness: isPath ? 0.08 : 0.02,
-  });
+  void cell;
+  void pathTexture;
+  void buildTexture;
   const tile = new THREE.Mesh(
-    new THREE.BoxGeometry(0.94, isPath ? 0.12 : 0.08, 0.94),
-    material
+    new THREE.PlaneGeometry(0.96, 0.96),
+    new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false })
   );
-  tile.castShadow = true;
-  tile.receiveShadow = true;
+  tile.rotation.x = -Math.PI / 2;
   return tile;
 }
 
@@ -2013,9 +2031,9 @@ export default function ThreeBattlefield({
     const scene = new THREE.Scene();
     scene.fog = new THREE.Fog(theme.fog, 10, 32);
 
-    const camera = new THREE.PerspectiveCamera(30, width / height, 0.1, 100);
-    camera.position.set(8, 10.6, 16.4);
-    camera.lookAt(8, 0, 5.1);
+    const camera = new THREE.PerspectiveCamera(28, width / height, 0.1, 100);
+    camera.position.set(8, 9.7, 15.1);
+    camera.lookAt(8, 0.2, 4.8);
 
     const ambientLight = new THREE.AmbientLight(0xa5f3fc, 0.92);
     scene.add(ambientLight);
@@ -2086,10 +2104,11 @@ export default function ThreeBattlefield({
     scene.add(ground);
 
     const board = new THREE.Mesh(
-      new THREE.BoxGeometry(17.8, 0.32, 11.8),
+      createRoundedPlateGeometry(17.9, 11.9, 0.28, 0.55),
       new THREE.MeshStandardMaterial({ color: 0x1e293b, map: boardTexture, roughness: 0.74, metalness: 0.12 })
     );
-    board.position.set(7.5, -0.18, 4.5);
+    board.rotation.x = -Math.PI / 2;
+    board.position.set(7.5, -0.2, 4.5);
     board.receiveShadow = true;
     scene.add(board);
 
@@ -2112,23 +2131,14 @@ export default function ThreeBattlefield({
     rightGlow.rotation.y = -Math.PI / 2.8;
     scene.add(rightGlow);
 
-    for (const z of [-1.2, 10.2]) {
-      const rail = new THREE.Mesh(
-        new THREE.BoxGeometry(18.2, 0.55, 0.5),
-        new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.86 })
-      );
-      rail.position.set(7.5, 0.08, z);
-      scene.add(rail);
-    }
-
-    for (const x of [-1.2, 16.2]) {
-      const rail = new THREE.Mesh(
-        new THREE.BoxGeometry(0.5, 0.55, 11.4),
-        new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.86 })
-      );
-      rail.position.set(x, 0.08, 4.5);
-      scene.add(rail);
-    }
+    const arenaRim = new THREE.Mesh(
+      new THREE.TorusGeometry(7.5, 0.18, 12, 64),
+      new THREE.MeshStandardMaterial({ color: 0x334155, emissive: theme.glow, emissiveIntensity: 0.16, roughness: 0.82, metalness: 0.14 })
+    );
+    arenaRim.rotation.x = Math.PI / 2;
+    arenaRim.scale.set(1.02, 0.76, 1);
+    arenaRim.position.set(7.5, 0.06, 4.5);
+    scene.add(arenaRim);
 
     for (let i = 0; i < cols; i++) {
       for (const z of [-1.75, 10.75]) {
@@ -2466,77 +2476,111 @@ export default function ThreeBattlefield({
       for (let row = 0; row < rows; row++) {
         for (let col = 0; col < map.grid[row].length; col++) {
           const cell = map.grid[row][col];
-          const terrainHeight =
-            0.08 +
-            Math.max(0, Math.sin(col * 0.55) * 0.03 + Math.cos(row * 0.7) * 0.025) +
-            (cell === 1 ? 0.01 : 0.03);
-          const terrainBase = new THREE.Mesh(
-            new THREE.BoxGeometry(0.98, terrainHeight, 0.98),
-            new THREE.MeshStandardMaterial({
-              color: cell === 1 ? 0x223548 : 0x12352f,
-              roughness: 0.96,
-              metalness: 0.02,
-            })
-          );
-          terrainBase.castShadow = true;
-          terrainBase.receiveShadow = true;
-          terrainBase.position.set(col + 0.5, -terrainHeight * 0.5 + (cell === 1 ? 0.01 : 0), rows - row - 0.5);
-          mapGroup.add(terrainBase);
-
           const tile = createMapTile(cell, pathTileTexture, buildTileTexture);
-          tile.position.set(col + 0.5, terrainHeight + (cell === 1 ? 0.01 : 0), rows - row - 0.5);
+          tile.position.set(col + 0.5, 0.18, rows - row - 0.5);
           tile.userData.row = row;
           tile.userData.col = col;
           tilePickMeshes.push(tile);
           mapGroup.add(tile);
 
           if (cell === 1) {
-            const paverInset = new THREE.Mesh(
-              new THREE.BoxGeometry(0.74, 0.03, 0.74),
-              new THREE.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.84, metalness: 0.06 })
+            const pathPlate = new THREE.Mesh(
+              createRoundedPlateGeometry(0.86, 0.86, 0.04, 0.18),
+              new THREE.MeshStandardMaterial({
+                color: 0x9fb4c8,
+                map: pathTileTexture,
+                roughness: 0.82,
+                metalness: 0.08,
+              })
             );
-            paverInset.position.set(col + 0.5, terrainHeight + 0.08, rows - row - 0.5);
-            mapGroup.add(paverInset);
+            pathPlate.rotation.x = -Math.PI / 2;
+            pathPlate.rotation.z = ((row + col) % 2) * (Math.PI / 2);
+            pathPlate.position.set(col + 0.5, 0.06, rows - row - 0.5 - 0.02);
+            pathPlate.castShadow = true;
+            pathPlate.receiveShadow = true;
+            mapGroup.add(pathPlate);
+
+            const neighbors = {
+              up: row > 0 && map.grid[row - 1][col] === 1,
+              down: row < rows - 1 && map.grid[row + 1][col] === 1,
+              left: col > 0 && map.grid[row][col - 1] === 1,
+              right: col < map.grid[row].length - 1 && map.grid[row][col + 1] === 1,
+            };
+
+            if (neighbors.left || neighbors.right) {
+              const bridgeX = new THREE.Mesh(
+                createRoundedPlateGeometry(1.02, 0.46, 0.03, 0.14),
+                new THREE.MeshStandardMaterial({ color: 0xaec2d5, map: pathTileTexture, roughness: 0.84, metalness: 0.06 })
+              );
+              bridgeX.rotation.x = -Math.PI / 2;
+              bridgeX.position.set(col + 0.5, 0.055, rows - row - 0.5 - 0.015);
+              mapGroup.add(bridgeX);
+            }
+
+            if (neighbors.up || neighbors.down) {
+              const bridgeZ = new THREE.Mesh(
+                createRoundedPlateGeometry(0.46, 1.02, 0.03, 0.14),
+                new THREE.MeshStandardMaterial({ color: 0xaec2d5, map: pathTileTexture, roughness: 0.84, metalness: 0.06 })
+              );
+              bridgeZ.rotation.x = -Math.PI / 2;
+              bridgeZ.position.set(col + 0.5, 0.055, rows - row - 0.5 - 0.015);
+              mapGroup.add(bridgeZ);
+            }
 
             if ((row + col) % 3 === 0) {
               const seam = new THREE.Mesh(
-                new THREE.BoxGeometry(0.58, 0.012, 0.06),
-                new THREE.MeshStandardMaterial({ color: 0xcbd5e1, roughness: 0.8, metalness: 0.04 })
+                new THREE.PlaneGeometry(0.42, 0.05),
+                new THREE.MeshBasicMaterial({ color: 0xe2e8f0, transparent: true, opacity: 0.32 })
               );
-              seam.position.set(col + 0.5, terrainHeight + 0.102, rows - row - 0.5);
+              seam.rotation.x = -Math.PI / 2;
+              seam.position.set(col + 0.5, 0.094, rows - row - 0.5);
               seam.rotation.y = (row + col) % 2 === 0 ? 0 : Math.PI / 2;
               mapGroup.add(seam);
             }
           }
 
           if (cell !== 1) {
-            const buildPlate = new THREE.Mesh(
-              new THREE.BoxGeometry(0.72, 0.028, 0.72),
-              new THREE.MeshStandardMaterial({ color: 0x355f53, roughness: 0.9, metalness: 0.03 })
+            const buildPatch = new THREE.Mesh(
+              new THREE.CircleGeometry(0.44, 24),
+              new THREE.MeshStandardMaterial({
+                color: 0x355f53,
+                map: buildTileTexture,
+                roughness: 0.95,
+                metalness: 0.02,
+                transparent: true,
+                opacity: 0.92,
+              })
             );
-            buildPlate.position.set(col + 0.5, terrainHeight + 0.045, rows - row - 0.5);
-            buildPlate.rotation.y = ((row + col) % 2) * (Math.PI / 4);
-            mapGroup.add(buildPlate);
+            buildPatch.rotation.x = -Math.PI / 2;
+            buildPatch.position.set(col + 0.5, 0.03, rows - row - 0.5);
+            mapGroup.add(buildPatch);
 
             const buildAccent = new THREE.Mesh(
-              new THREE.PlaneGeometry(0.52, 0.52),
+              new THREE.RingGeometry(0.2, 0.28, 28),
               basicGlow(0x7dd3c7, 0.12)
             );
             buildAccent.rotation.x = -Math.PI / 2;
-            buildAccent.rotation.z = Math.PI / 4;
-            buildAccent.position.set(col + 0.5, terrainHeight + 0.068, rows - row - 0.5);
+            buildAccent.position.set(col + 0.5, 0.051, rows - row - 0.5);
             mapGroup.add(buildAccent);
             buildPads.push(buildAccent);
+
+            const buildDisc = new THREE.Mesh(
+              new THREE.CircleGeometry(0.16, 20),
+              basicGlow(theme.glow, 0.08)
+            );
+            buildDisc.rotation.x = -Math.PI / 2;
+            buildDisc.position.set(col + 0.5, 0.052, rows - row - 0.5);
+            mapGroup.add(buildDisc);
 
             if ((row + col) % 2 === 0) {
               const tuft = new THREE.Mesh(
                 new THREE.ConeGeometry(0.06, 0.18, 5),
                 new THREE.MeshStandardMaterial({ color: 0x0f766e, roughness: 0.96, metalness: 0.01 })
               );
-              tuft.position.set(col + 0.2, terrainHeight + 0.12, rows - row - 0.18);
+              tuft.position.set(col + 0.16, 0.11, rows - row - 0.2);
               mapGroup.add(tuft);
               const tuft2 = tuft.clone();
-              tuft2.position.set(col + 0.78, terrainHeight + 0.1, rows - row - 0.72);
+              tuft2.position.set(col + 0.8, 0.09, rows - row - 0.76);
               tuft2.scale.set(0.8, 0.85, 0.8);
               mapGroup.add(tuft2);
             } else {
@@ -2544,10 +2588,10 @@ export default function ThreeBattlefield({
                 new THREE.DodecahedronGeometry(0.05, 0),
                 new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.92, metalness: 0.02 })
               );
-              stone.position.set(col + 0.25, terrainHeight + 0.08, rows - row - 0.24);
+              stone.position.set(col + 0.25, 0.06, rows - row - 0.24);
               mapGroup.add(stone);
               const stone2 = stone.clone();
-              stone2.position.set(col + 0.75, terrainHeight + 0.075, rows - row - 0.66);
+              stone2.position.set(col + 0.75, 0.055, rows - row - 0.66);
               stone2.scale.setScalar(0.72);
               mapGroup.add(stone2);
             }

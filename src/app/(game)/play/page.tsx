@@ -1048,99 +1048,403 @@ function PlayPageContent() {
         </div>
       </div>
 
-      {/* Game Canvas Area */}
-      <div className="flex-1 relative bg-[#0d1520] overflow-hidden">
-        <div className="h-full w-full flex items-center justify-center px-1">
-          <div ref={containerRef} className="relative flex-1 h-full min-w-0 flex items-center justify-center">
-            <div
-              className="relative"
+      {/* Main Area: canvas left, desktop side panel right */}
+      <div className="flex-1 flex overflow-hidden">
+
+        {/* Game Canvas Area */}
+        <div className="flex-1 relative bg-[#0d1520] overflow-hidden">
+          <div className="h-full w-full flex items-center justify-center px-1">
+            <div ref={containerRef} className="relative flex-1 h-full min-w-0 flex items-center justify-center">
+              <div
+                className="relative"
+                style={{
+                  width: canvasSize.width || undefined,
+                  height: canvasSize.height || undefined,
+                }}
+              >
+                {canvasSize.width > 0 && canvasSize.height > 0 && (
+                  <div
+                    className="absolute inset-0 rounded overflow-hidden"
+                    style={{ width: canvasSize.width, height: canvasSize.height }}
+                  >
+                    <ThreeBattlefield
+                      width={canvasSize.width}
+                      height={canvasSize.height}
+                      cellSize={cellSize}
+                      getEngine={gameLoop.getEngine}
+                      selectedTowerId={selectedPlacedTowerId}
+                      placementInfo={placementPreview}
+                      onTileHover={handleBattlefieldHover}
+                      onTileLeave={handleBattlefieldLeave}
+                      onTileSelect={handleBattlefieldSelect}
+                    />
+                  </div>
+                )}
+                <canvas
+                  ref={canvasRef}
+                  className="relative z-10 block touch-none rounded pointer-events-none"
+                  onClick={handleCanvasTap}
+                  onMouseMove={handleCanvasMouseMove}
+                  onMouseLeave={handleCanvasMouseLeave}
+                  onTouchMove={handleCanvasTouchMove}
+                  style={{ imageRendering: 'pixelated', background: 'transparent' }}
+                />
+                <div className="canvas-vignette rounded" />
+                <div className="canvas-glow-border" />
+              </div>
+            </div>
+          </div>
+
+          {/* Wave start button overlay */}
+          {!isGameOver && !showStageClear && (
+            <div className="absolute bottom-4 right-4 z-10">
+              <motion.button
+                whileTap={{ scale: 0.9 }}
+                whileHover={{ scale: 1.05 }}
+                onClick={handleStartWave}
+                className="relative flex items-center gap-2 px-4 py-2.5 rounded-2xl text-white text-xs font-bold animate-wave-btn-pulse glass-shimmer overflow-hidden"
+                style={{
+                  background: 'linear-gradient(135deg, rgba(99,102,241,0.85), rgba(147,51,234,0.85))',
+                  border: '1px solid rgba(165,180,252,0.3)',
+                }}
+              >
+                <Swords className="w-4 h-4" />
+                <span className="tracking-wide">다음 웨이브</span>
+                <div className="absolute inset-0 btn-shine-overlay opacity-60 pointer-events-none" />
+              </motion.button>
+            </div>
+          )}
+        </div>
+
+        {/* ── Desktop Side Panel (lg+) ─────────────────────── */}
+        <div
+          className="hidden lg:flex flex-col w-72 shrink-0 border-l border-slate-800/30"
+          style={{
+            background: 'linear-gradient(180deg, rgba(15,23,42,0.98) 0%, rgba(15,23,42,0.94) 100%)',
+            backdropFilter: 'blur(16px)',
+          }}
+        >
+          {/* Controls row */}
+          <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-800/40">
+            <a href="/adventure">
+              <div className="w-9 h-9 rounded-xl ctrl-btn-glass flex items-center justify-center">
+                <ArrowLeft className="w-4 h-4 text-slate-400" />
+              </div>
+            </a>
+            <motion.button
+              whileTap={{ scale: 0.9 }}
+              onClick={togglePause}
+              className={`w-9 h-9 rounded-xl ctrl-btn-glass flex items-center justify-center ${isPaused ? 'border-emerald-500/30' : ''}`}
+              style={isPaused ? { boxShadow: '0 0 12px rgba(16,185,129,0.2)', borderColor: 'rgba(16,185,129,0.3)' } : undefined}
+            >
+              {isPaused
+                ? <Play className="w-4 h-4 text-emerald-400" style={{ filter: 'drop-shadow(0 0 4px rgba(16,185,129,0.5))' }} />
+                : <Pause className="w-4 h-4 text-slate-400" />}
+            </motion.button>
+            <motion.button
+              whileTap={{ scale: 0.9 }}
+              onClick={handleSpeedToggle}
+              className="speed-badge h-9 px-3 rounded-xl ctrl-btn-glass flex items-center gap-1.5 text-sm"
+              data-fast={speed > 1 ? 'true' : 'false'}
+            >
+              <FastForward className="w-4 h-4 text-amber-400" style={speed > 1 ? { filter: 'drop-shadow(0 0 4px rgba(245,158,11,0.5))' } : undefined} />
+              <span className={`font-bold tabular-nums ${speed > 1 ? 'text-amber-300 text-glow-gold' : 'text-amber-400'}`}>x{speed}</span>
+              {speed === 3 && <span className="ml-0.5 px-1 py-px text-[8px] font-black rounded bg-amber-500/20 text-amber-300 uppercase tracking-wider">최대</span>}
+            </motion.button>
+            <div className="flex-1" />
+            <motion.button
+              whileTap={{ scale: 0.9 }}
+              whileHover={{ scale: 1.03 }}
+              onClick={handleManualQuiz}
+              className="relative h-9 px-4 rounded-xl flex items-center gap-1.5 text-sm text-white font-bold btn-glow overflow-hidden"
               style={{
-                width: canvasSize.width || undefined,
-                height: canvasSize.height || undefined,
+                background: 'linear-gradient(135deg, rgba(99,102,241,0.8), rgba(79,70,229,0.9))',
+                border: '1px solid rgba(165,180,252,0.2)',
+                boxShadow: '0 0 12px rgba(99,102,241,0.2)',
               }}
             >
-              {canvasSize.width > 0 && canvasSize.height > 0 && (
-                <div
-                  className="absolute inset-0 rounded overflow-hidden"
-                  style={{ width: canvasSize.width, height: canvasSize.height }}
-                >
-                  <ThreeBattlefield
-                    width={canvasSize.width}
-                    height={canvasSize.height}
-                    cellSize={cellSize}
-                    getEngine={gameLoop.getEngine}
-                    selectedTowerId={selectedPlacedTowerId}
-                    placementInfo={placementPreview}
-                    onTileHover={handleBattlefieldHover}
-                    onTileLeave={handleBattlefieldLeave}
-                    onTileSelect={handleBattlefieldSelect}
-                  />
+              <BookOpen className="w-4 h-4" style={{ filter: 'drop-shadow(0 0 4px rgba(165,180,252,0.6))' }} />
+              <span className="tracking-wide">퀴즈</span>
+              <div className="absolute inset-0 btn-shine-overlay opacity-40 pointer-events-none" />
+            </motion.button>
+          </div>
+
+          {/* Hero section */}
+          <div className="px-3 py-2 border-b border-slate-800/40">
+            <div className="flex items-center gap-2 rounded-2xl bg-slate-900/50 px-3 py-2">
+              <div
+                className="w-10 h-10 rounded-xl flex items-center justify-center text-xl font-black shrink-0"
+                style={{
+                  background: `linear-gradient(135deg, ${currentHero.color}, rgba(255,255,255,0.15))`,
+                  boxShadow: `0 0 16px ${currentHero.color}44`,
+                }}
+              >
+                {currentHero.icon}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-[10px] uppercase tracking-[0.2em] text-slate-400">영웅 지원</div>
+                <div className="text-sm font-bold text-white truncate">{currentHero.nameKr}</div>
+                <div className="text-[10px] text-slate-500 truncate">{currentHero.activeSkill.name} / {currentHero.ultimate.name}</div>
+              </div>
+              <motion.button
+                whileTap={{ scale: 0.96 }}
+                onClick={castHeroActive}
+                disabled={heroCooldowns.active > 0}
+                className="rounded-xl px-2 py-2 text-[11px] font-bold text-white disabled:opacity-40 min-w-[60px]"
+                style={{
+                  background: 'linear-gradient(135deg, rgba(59,130,246,0.8), rgba(14,165,233,0.8))',
+                  boxShadow: heroCooldowns.active <= 0 ? '0 0 18px rgba(56,189,248,0.22)' : undefined,
+                }}
+              >
+                <div className="text-[9px] uppercase tracking-[0.22em] text-white/60">스킬</div>
+                {heroCooldowns.active > 0 ? `${heroCooldowns.active.toFixed(1)}s` : '발동'}
+              </motion.button>
+              <motion.button
+                whileTap={{ scale: 0.96 }}
+                onClick={castHeroUltimate}
+                disabled={heroCooldowns.ultimate > 0}
+                className="rounded-xl px-2 py-2 text-[11px] font-bold text-white disabled:opacity-40 min-w-[60px]"
+                style={{
+                  background: 'linear-gradient(135deg, rgba(168,85,247,0.82), rgba(236,72,153,0.82))',
+                  boxShadow: heroCooldowns.ultimate <= 0 ? '0 0 18px rgba(236,72,153,0.22)' : undefined,
+                }}
+              >
+                <div className="text-[9px] uppercase tracking-[0.22em] text-white/60">버스트</div>
+                {heroCooldowns.ultimate > 0 ? `${heroCooldowns.ultimate.toFixed(1)}s` : '궁극기'}
+              </motion.button>
+            </div>
+          </div>
+
+          {/* Tower upgrade panel (inside side panel – no layout impact) */}
+          {selectedPlacedTower && (
+            <div className="px-2 py-2 border-b border-slate-800/40">
+              <div className="rounded-2xl border border-slate-700/50 bg-slate-950/75 px-2 py-2 backdrop-blur-xl">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-base leading-none">{selectedPlacedTowerDef?.icon}</span>
+                    <div className="text-xs font-bold text-white">{selectedPlacedTowerDef?.nameKr ?? selectedPlacedTower.type}</div>
+                    <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full"
+                      style={{ color: selectedPlacedTowerDef?.color ?? '#94a3b8', background: `${selectedPlacedTowerDef?.color ?? '#94a3b8'}18` }}>
+                      {selectedPlacedTowerDef ? getAttackTypeLabel(selectedPlacedTowerDef.attackType) : '타워'}
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-amber-300 font-bold">{gold}G</div>
                 </div>
-              )}
-              <canvas
-                ref={canvasRef}
-                className="relative z-10 block touch-none rounded pointer-events-none"
-                onClick={handleCanvasTap}
-                onMouseMove={handleCanvasMouseMove}
-                onMouseLeave={handleCanvasMouseLeave}
-                onTouchMove={handleCanvasTouchMove}
-                style={{ imageRendering: 'pixelated', background: 'transparent' }}
-              />
-              <div className="canvas-vignette rounded" />
-              <div className="canvas-glow-border" />
+                <div className="grid grid-cols-4 gap-1 mb-2">
+                  {[
+                    { label: '피해', value: Math.round(selectedPlacedTower.stats.damage) },
+                    { label: '사거리', value: selectedPlacedTower.stats.range.toFixed(1) },
+                    { label: '속도', value: selectedPlacedTower.stats.attackSpeed.toFixed(2) },
+                    { label: '치명타', value: `${Math.round(selectedPlacedTower.stats.critChance * 100)}%` },
+                  ].map((stat) => (
+                    <div key={stat.label} className="rounded-xl px-1.5 py-1.5 text-center"
+                      style={{ background: 'rgba(15,23,42,0.7)', border: '1px solid rgba(71,85,105,0.18)' }}>
+                      <div className="text-[8px] text-slate-500">{stat.label}</div>
+                      <div className="text-xs font-black text-white">{stat.value}</div>
+                    </div>
+                  ))}
+                </div>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {getTowerPathInfos(selectedPlacedTower.type).map((pathInfo) => {
+                    const currentTier = selectedPlacedTower.upgradePaths?.[pathInfo.path] ?? 0;
+                    const pathUpgrades = getUpgradePath(selectedPlacedTower.type, pathInfo.path);
+                    const nextUpgrade = pathUpgrades[currentTier];
+                    const allowed = canUpgrade(selectedPlacedTower.type, selectedPlacedTower.upgradePaths ?? [0, 0, 0], pathInfo.path);
+                    const affordable = !!nextUpgrade && gold >= nextUpgrade.cost;
+                    return (
+                      <button
+                        key={`${selectedPlacedTower.id}-${pathInfo.path}-desk`}
+                        onClick={() => handleTowerBranchUpgrade(pathInfo.path)}
+                        disabled={!nextUpgrade || !allowed || !affordable}
+                        className="rounded-xl border px-2 py-1.5 text-left disabled:opacity-40"
+                        style={{
+                          borderColor: allowed ? 'rgba(148,163,184,0.24)' : 'rgba(71,85,105,0.2)',
+                          background: 'linear-gradient(180deg, rgba(15,23,42,0.75), rgba(15,23,42,0.45))',
+                        }}
+                      >
+                        <div className="flex items-center justify-between text-[10px] mb-0.5">
+                          <span className="text-slate-200 font-bold truncate">{pathInfo.name}</span>
+                          <span className="text-indigo-300 ml-1 shrink-0">{currentTier}/5</span>
+                        </div>
+                        <div className="text-[9px] text-slate-500 mb-1 truncate">{nextUpgrade ? nextUpgrade.name : '만렙'}</div>
+                        <div className="text-[9px] text-amber-300 font-bold">{nextUpgrade ? `${nextUpgrade.cost}G` : '잠김'}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Tower selection – vertical scroll */}
+          <div className="flex-1 overflow-y-auto scrollbar-hide">
+            <div className="flex flex-col gap-0.5 px-2 py-2">
+              {/* Random Tower */}
+              <motion.button
+                whileTap={{ scale: 0.97 }}
+                onClick={handleRandomTowerSelect}
+                className={`flex items-center gap-2 w-full px-2 py-2 rounded-xl transition-all select-none relative overflow-hidden ${
+                  isRandomTower
+                    ? 'animate-rainbow-border border-2 shadow-lg'
+                    : gold >= RANDOM_TOWER_COST
+                      ? 'border border-purple-500/40 hover:border-amber-400/60'
+                      : 'border border-transparent opacity-35'
+                }`}
+                style={
+                  isRandomTower
+                    ? { background: 'linear-gradient(135deg, rgba(147,51,234,0.3), rgba(245,158,11,0.25))' }
+                    : gold >= RANDOM_TOWER_COST
+                      ? { background: 'linear-gradient(180deg, rgba(88,28,135,0.35), rgba(120,53,15,0.3))' }
+                      : { background: 'rgba(30,41,59,0.3)' }
+                }
+              >
+                <span className={`text-xl w-7 text-center ${isRandomTower || gold >= RANDOM_TOWER_COST ? 'animate-mystery' : ''}`}
+                  style={{
+                    background: 'linear-gradient(135deg, #f59e0b, #ec4899, #8b5cf6, #06b6d4)',
+                    WebkitBackgroundClip: 'text',
+                    WebkitTextFillColor: gold >= RANDOM_TOWER_COST ? 'transparent' : undefined,
+                  }}
+                >?</span>
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs font-bold text-amber-200/90">랜덤</div>
+                </div>
+                <span className={`text-[10px] font-bold tabular-nums px-1.5 py-px rounded-full shrink-0 ${
+                  gold >= RANDOM_TOWER_COST ? 'text-amber-300 bg-amber-500/15' : 'text-slate-600'
+                }`}>{RANDOM_TOWER_COST}G</span>
+                {gold >= RANDOM_TOWER_COST && <div className="absolute inset-0 btn-shine-overlay opacity-20 pointer-events-none rounded-xl" />}
+              </motion.button>
+              <div className="h-px bg-slate-700/30 my-1" />
+              {towerList.map((tower) => {
+                const isSelected = selectedTower === tower.type && !isRandomTower;
+                const canAfford = gold >= tower.cost;
+                const attackBadge = getAttackTypeLabel(tower.attackType);
+                return (
+                  <motion.button
+                    key={tower.type}
+                    whileTap={{ scale: 0.97 }}
+                    onClick={() => handleTowerSelect(tower.type)}
+                    className={`flex items-center gap-2 w-full px-2 py-1.5 rounded-xl transition-colors select-none relative overflow-hidden ${
+                      isSelected
+                        ? 'border border-indigo-400 animate-tower-selected'
+                        : canAfford
+                          ? 'border border-slate-600/30 hover:border-slate-500/50'
+                          : 'border border-transparent opacity-35'
+                    }`}
+                    style={
+                      isSelected
+                        ? { background: 'linear-gradient(180deg, rgba(99,102,241,0.25), rgba(79,70,229,0.15))' }
+                        : canAfford
+                          ? { background: 'rgba(30,41,59,0.5)', backdropFilter: 'blur(4px)' }
+                          : { background: 'rgba(30,41,59,0.25)' }
+                    }
+                  >
+                    <span className="text-lg w-7 text-center shrink-0"
+                      style={isSelected ? { filter: 'drop-shadow(0 0 6px rgba(99,102,241,0.5))' } : undefined}>
+                      {tower.icon}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className={`text-xs font-medium truncate ${isSelected ? 'text-indigo-200' : 'text-slate-300'}`}>{tower.nameKr}</div>
+                      <div className="text-[9px] text-slate-500 tabular-nums">피해 {Math.round(tower.baseStats.damage)} / 사거리 {tower.baseStats.range.toFixed(1)}</div>
+                    </div>
+                    <div className="flex flex-col items-end gap-0.5 shrink-0">
+                      <span className="text-[8px] font-bold px-1.5 py-px rounded-full"
+                        style={{ color: canAfford ? tower.color : '#64748b', background: canAfford ? `${tower.color}1c` : 'rgba(51,65,85,0.35)' }}>
+                        {attackBadge}
+                      </span>
+                      <span className={`text-[10px] font-bold tabular-nums ${isSelected ? 'text-amber-300' : canAfford ? 'text-amber-400/80' : 'text-slate-600'}`}>
+                        {tower.cost}G
+                      </span>
+                    </div>
+                    {isSelected && <div className="absolute inset-0 btn-shine-overlay opacity-40 pointer-events-none rounded-xl" />}
+                  </motion.button>
+                );
+              })}
             </div>
           </div>
         </div>
+        {/* ── End Desktop Side Panel ───────────────────────── */}
 
-        {/* Wave start button overlay */}
-        {!isGameOver && !showStageClear && (
-          <div className="absolute bottom-4 right-4 z-10">
-            <motion.button
-              whileTap={{ scale: 0.9 }}
-              whileHover={{ scale: 1.05 }}
-              onClick={handleStartWave}
-              className="relative flex items-center gap-2 px-4 py-2.5 rounded-2xl text-white text-xs font-bold animate-wave-btn-pulse glass-shimmer overflow-hidden"
-              style={{
-                background: 'linear-gradient(135deg, rgba(99,102,241,0.85), rgba(147,51,234,0.85))',
-                border: '1px solid rgba(165,180,252,0.3)',
-              }}
-            >
-              <Swords className="w-4 h-4" />
-              <span className="tracking-wide">다음 웨이브</span>
-              {/* Shine overlay */}
-              <div className="absolute inset-0 btn-shine-overlay opacity-60 pointer-events-none" />
-            </motion.button>
-          </div>
-        )}
       </div>
 
-      {/* Control Bar */}
-      <div className="glass-dark safe-area-pb relative shrink-0">
+      {/* ── Mobile Control Bar (lg:hidden) ───────────────── */}
+      <div className="lg:hidden glass-dark safe-area-pb relative shrink-0">
+        {/* Tower upgrade panel – absolute overlay, does NOT shrink canvas */}
+        {selectedPlacedTower && (
+          <div className="absolute bottom-full left-0 right-0 z-30 px-3 pb-2">
+            <div className="rounded-2xl border border-slate-700/50 bg-slate-950/90 backdrop-blur-xl px-3 py-2 shadow-2xl">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-base leading-none">{selectedPlacedTowerDef?.icon}</span>
+                  <div className="text-xs font-bold text-white">{selectedPlacedTowerDef?.nameKr ?? selectedPlacedTower.type}</div>
+                  <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full"
+                    style={{ color: selectedPlacedTowerDef?.color ?? '#94a3b8', background: `${selectedPlacedTowerDef?.color ?? '#94a3b8'}18` }}>
+                    {selectedPlacedTowerDef ? getAttackTypeLabel(selectedPlacedTowerDef.attackType) : '타워'}
+                  </span>
+                </div>
+                <div className="text-[11px] text-amber-300 font-bold">{gold}G</div>
+              </div>
+              <div className="grid grid-cols-4 gap-1.5 mb-2">
+                {[
+                  { label: '피해', value: Math.round(selectedPlacedTower.stats.damage) },
+                  { label: '사거리', value: selectedPlacedTower.stats.range.toFixed(1) },
+                  { label: '속도', value: selectedPlacedTower.stats.attackSpeed.toFixed(2) },
+                  { label: '치명타', value: `${Math.round(selectedPlacedTower.stats.critChance * 100)}%` },
+                ].map((stat) => (
+                  <div key={stat.label} className="rounded-xl px-2 py-1.5"
+                    style={{ background: 'rgba(15,23,42,0.8)', border: '1px solid rgba(71,85,105,0.18)' }}>
+                    <div className="text-[9px] text-slate-500">{stat.label}</div>
+                    <div className="text-sm font-black text-white">{stat.value}</div>
+                  </div>
+                ))}
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                {getTowerPathInfos(selectedPlacedTower.type).map((pathInfo) => {
+                  const currentTier = selectedPlacedTower.upgradePaths?.[pathInfo.path] ?? 0;
+                  const pathUpgrades = getUpgradePath(selectedPlacedTower.type, pathInfo.path);
+                  const nextUpgrade = pathUpgrades[currentTier];
+                  const allowed = canUpgrade(selectedPlacedTower.type, selectedPlacedTower.upgradePaths ?? [0, 0, 0], pathInfo.path);
+                  const affordable = !!nextUpgrade && gold >= nextUpgrade.cost;
+                  return (
+                    <button
+                      key={`${selectedPlacedTower.id}-${pathInfo.path}-mob`}
+                      onClick={() => handleTowerBranchUpgrade(pathInfo.path)}
+                      disabled={!nextUpgrade || !allowed || !affordable}
+                      className="rounded-xl border px-2 py-2 text-left disabled:opacity-40"
+                      style={{
+                        borderColor: allowed ? 'rgba(148,163,184,0.24)' : 'rgba(71,85,105,0.2)',
+                        background: 'linear-gradient(180deg, rgba(15,23,42,0.75), rgba(15,23,42,0.45))',
+                      }}
+                    >
+                      <div className="flex items-center justify-between text-xs mb-1">
+                        <span className="text-slate-200 font-bold">{pathInfo.name}</span>
+                        <span className="text-indigo-300">{currentTier}/5</span>
+                      </div>
+                      <div className="text-[10px] text-slate-500 mb-1">{nextUpgrade ? nextUpgrade.name : '만렙'}</div>
+                      <div className="text-[10px] text-amber-300 font-bold">{nextUpgrade ? `${nextUpgrade.cost}G` : '잠김'}</div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="flex items-center gap-2 px-3 py-2" style={{ borderBottom: '1px solid rgba(71,85,105,0.15)' }}>
           <a href="/adventure">
             <div className="w-9 h-9 rounded-xl ctrl-btn-glass flex items-center justify-center">
               <ArrowLeft className="w-4 h-4 text-slate-400" />
             </div>
           </a>
-
           <motion.button
             whileTap={{ scale: 0.9 }}
             onClick={togglePause}
-            className={`w-9 h-9 rounded-xl ctrl-btn-glass flex items-center justify-center ${
-              isPaused ? 'border-emerald-500/30' : ''
-            }`}
-            style={isPaused ? {
-              boxShadow: '0 0 12px rgba(16,185,129,0.2)',
-              borderColor: 'rgba(16,185,129,0.3)',
-            } : undefined}
+            className={`w-9 h-9 rounded-xl ctrl-btn-glass flex items-center justify-center ${isPaused ? 'border-emerald-500/30' : ''}`}
+            style={isPaused ? { boxShadow: '0 0 12px rgba(16,185,129,0.2)', borderColor: 'rgba(16,185,129,0.3)' } : undefined}
           >
-            {isPaused ? (
-              <Play className="w-4 h-4 text-emerald-400" style={{ filter: 'drop-shadow(0 0 4px rgba(16,185,129,0.5))' }} />
-            ) : (
-              <Pause className="w-4 h-4 text-slate-400" />
-            )}
+            {isPaused
+              ? <Play className="w-4 h-4 text-emerald-400" style={{ filter: 'drop-shadow(0 0 4px rgba(16,185,129,0.5))' }} />
+              : <Pause className="w-4 h-4 text-slate-400" />}
           </motion.button>
-
           <motion.button
             whileTap={{ scale: 0.9 }}
             onClick={handleSpeedToggle}
@@ -1149,13 +1453,9 @@ function PlayPageContent() {
           >
             <FastForward className="w-4 h-4 text-amber-400" style={speed > 1 ? { filter: 'drop-shadow(0 0 4px rgba(245,158,11,0.5))' } : undefined} />
             <span className={`font-bold tabular-nums ${speed > 1 ? 'text-amber-300 text-glow-gold' : 'text-amber-400'}`}>x{speed}</span>
-            {speed === 3 && (
-              <span className="ml-0.5 px-1 py-px text-[8px] font-black rounded bg-amber-500/20 text-amber-300 uppercase tracking-wider">최대</span>
-            )}
+            {speed === 3 && <span className="ml-0.5 px-1 py-px text-[8px] font-black rounded bg-amber-500/20 text-amber-300 uppercase tracking-wider">최대</span>}
           </motion.button>
-
           <div className="flex-1" />
-
           <motion.button
             whileTap={{ scale: 0.9 }}
             whileHover={{ scale: 1.03 }}
@@ -1176,7 +1476,7 @@ function PlayPageContent() {
         <div className="px-3 py-2 border-b border-slate-800/40">
           <div className="flex items-center gap-2 rounded-2xl bg-slate-900/50 px-3 py-2">
             <div
-              className="w-10 h-10 rounded-xl flex items-center justify-center text-xl font-black"
+              className="w-10 h-10 rounded-xl flex items-center justify-center text-xl font-black shrink-0"
               style={{
                 background: `linear-gradient(135deg, ${currentHero.color}, rgba(255,255,255,0.15))`,
                 boxShadow: `0 0 16px ${currentHero.color}44`,
@@ -1218,112 +1518,26 @@ function PlayPageContent() {
           </div>
         </div>
 
-        {selectedPlacedTower && (
-          <div className="px-3 py-2 border-b border-slate-800/40">
-            <div
-              className="rounded-3xl border border-slate-700/50 bg-slate-950/75 px-3 py-2 shadow-2xl backdrop-blur-xl"
-              style={{ boxShadow: '0 12px 30px rgba(2,6,23,0.28)' }}
-            >
-              <div className="flex items-center justify-between mb-2">
-                <div>
-                  <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500">타워 경로</div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-lg leading-none">{selectedPlacedTowerDef?.icon}</span>
-                    <div className="text-sm font-bold text-white">{selectedPlacedTowerDef?.nameKr ?? selectedPlacedTower.type}</div>
-                    <span
-                      className="text-[9px] font-black uppercase tracking-[0.2em] px-2 py-1 rounded-full"
-                      style={{
-                        color: selectedPlacedTowerDef?.color ?? '#94a3b8',
-                        background: `${selectedPlacedTowerDef?.color ?? '#94a3b8'}18`,
-                      }}
-                    >
-                      {selectedPlacedTowerDef ? getAttackTypeLabel(selectedPlacedTowerDef.attackType) : '타워'}
-                    </span>
-                  </div>
-                </div>
-                <div className="text-[11px] text-amber-300 font-bold">{gold}G</div>
-              </div>
-              <div className="grid grid-cols-4 gap-2 mb-2">
-                {[
-                  { label: '피해', value: Math.round(selectedPlacedTower.stats.damage) },
-                  { label: '사거리', value: selectedPlacedTower.stats.range.toFixed(1) },
-                  { label: '속도', value: selectedPlacedTower.stats.attackSpeed.toFixed(2) },
-                  { label: '치명타', value: `${Math.round(selectedPlacedTower.stats.critChance * 100)}%` },
-                ].map((stat) => (
-                  <div
-                    key={stat.label}
-                    className="rounded-2xl px-2 py-2"
-                    style={{
-                      background: 'linear-gradient(180deg, rgba(15,23,42,0.86), rgba(15,23,42,0.58))',
-                      border: '1px solid rgba(71,85,105,0.18)',
-                    }}
-                  >
-                    <div className="text-[9px] uppercase tracking-[0.2em] text-slate-500">{stat.label}</div>
-                    <div className="text-sm font-black text-white">{stat.value}</div>
-                  </div>
-                ))}
-              </div>
-              <div className="grid grid-cols-3 gap-2">
-                {getTowerPathInfos(selectedPlacedTower.type).map((pathInfo) => {
-                  const currentTier = selectedPlacedTower.upgradePaths?.[pathInfo.path] ?? 0;
-                  const pathUpgrades = getUpgradePath(selectedPlacedTower.type, pathInfo.path);
-                  const nextUpgrade = pathUpgrades[currentTier];
-                  const allowed = canUpgrade(selectedPlacedTower.type, selectedPlacedTower.upgradePaths ?? [0, 0, 0], pathInfo.path);
-                  const affordable = !!nextUpgrade && gold >= nextUpgrade.cost;
-
-                  return (
-                    <button
-                      key={`${selectedPlacedTower.id}-${pathInfo.path}`}
-                      onClick={() => handleTowerBranchUpgrade(pathInfo.path)}
-                      disabled={!nextUpgrade || !allowed || !affordable}
-                      className="rounded-2xl border px-2 py-2 text-left disabled:opacity-40"
-                      style={{
-                        borderColor: allowed ? 'rgba(148,163,184,0.24)' : 'rgba(71,85,105,0.2)',
-                        background: 'linear-gradient(180deg, rgba(15,23,42,0.75), rgba(15,23,42,0.45))',
-                      }}
-                    >
-                      <div className="flex items-center justify-between text-xs mb-1">
-                        <span className="text-slate-200 font-bold">{pathInfo.name}</span>
-                        <span className="text-indigo-300">{currentTier}/5</span>
-                      </div>
-                      <div className="text-[10px] text-slate-500 mb-2">{nextUpgrade ? nextUpgrade.name : '만렙'}</div>
-                      <div className="text-[10px] text-amber-300 font-bold">{nextUpgrade ? `${nextUpgrade.cost}G` : '잠김'}</div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Tower Selection Bar */}
+        {/* Tower Selection Bar (horizontal scroll) */}
         <div className="overflow-x-auto scrollbar-hide">
           <div className="flex gap-1.5 px-3 py-2 min-w-max">
-            {/* Random Tower Button */}
             <motion.button
               whileTap={{ scale: 0.93 }}
               onClick={handleRandomTowerSelect}
               className={`
                 flex flex-col items-center gap-0.5 p-2 rounded-xl min-w-[62px]
                 transition-all select-none relative overflow-hidden
-                ${
-                  isRandomTower
-                    ? 'animate-rainbow-border border-2 shadow-lg'
-                    : gold >= RANDOM_TOWER_COST
-                      ? 'border-2 border-purple-500/40 hover:border-amber-400/60'
-                      : 'border-2 border-transparent opacity-35'
-                }
+                ${isRandomTower
+                  ? 'animate-rainbow-border border-2 shadow-lg'
+                  : gold >= RANDOM_TOWER_COST
+                    ? 'border-2 border-purple-500/40 hover:border-amber-400/60'
+                    : 'border-2 border-transparent opacity-35'}
               `}
               style={
                 isRandomTower
-                  ? {
-                      background: 'linear-gradient(135deg, rgba(147,51,234,0.3), rgba(245,158,11,0.25))',
-                      boxShadow: '0 0 16px rgba(245,158,11,0.2), 0 0 32px rgba(147,51,234,0.1)',
-                    }
+                  ? { background: 'linear-gradient(135deg, rgba(147,51,234,0.3), rgba(245,158,11,0.25))', boxShadow: '0 0 16px rgba(245,158,11,0.2), 0 0 32px rgba(147,51,234,0.1)' }
                   : gold >= RANDOM_TOWER_COST
-                    ? {
-                        background: 'linear-gradient(180deg, rgba(88,28,135,0.35), rgba(120,53,15,0.3))',
-                      }
+                    ? { background: 'linear-gradient(180deg, rgba(88,28,135,0.35), rgba(120,53,15,0.3))' }
                     : { background: 'rgba(30,41,59,0.3)' }
               }
             >
@@ -1332,32 +1546,18 @@ function PlayPageContent() {
                   background: 'linear-gradient(135deg, #f59e0b, #ec4899, #8b5cf6, #06b6d4)',
                   WebkitBackgroundClip: 'text',
                   WebkitTextFillColor: gold >= RANDOM_TOWER_COST ? 'transparent' : undefined,
-                }}
-              >?</span>
-              <span className="text-[10px] text-amber-200/90 font-bold truncate w-full text-center tracking-wide">
-                랜덤
-              </span>
-              <span
-                className={`text-[10px] font-bold tabular-nums px-1.5 py-px rounded-full ${
-                  gold >= RANDOM_TOWER_COST ? 'text-amber-300 bg-amber-500/15' : 'text-slate-600'
-                }`}
-              >
-                {RANDOM_TOWER_COST}G
-              </span>
-              {/* Shimmer overlay for random button */}
-              {gold >= RANDOM_TOWER_COST && (
-                <div className="absolute inset-0 btn-shine-overlay opacity-30 pointer-events-none rounded-xl" />
-              )}
+                }}>?</span>
+              <span className="text-[10px] text-amber-200/90 font-bold truncate w-full text-center tracking-wide">랜덤</span>
+              <span className={`text-[10px] font-bold tabular-nums px-1.5 py-px rounded-full ${
+                gold >= RANDOM_TOWER_COST ? 'text-amber-300 bg-amber-500/15' : 'text-slate-600'
+              }`}>{RANDOM_TOWER_COST}G</span>
+              {gold >= RANDOM_TOWER_COST && <div className="absolute inset-0 btn-shine-overlay opacity-30 pointer-events-none rounded-xl" />}
             </motion.button>
-
-            {/* Separator */}
             <div className="tower-separator" />
-
             {towerList.map((tower) => {
               const isSelected = selectedTower === tower.type && !isRandomTower;
               const canAfford = gold >= tower.cost;
               const attackBadge = getAttackTypeLabel(tower.attackType);
-
               return (
                 <motion.button
                   key={tower.type}
@@ -1368,24 +1568,17 @@ function PlayPageContent() {
                   className={`
                     flex flex-col items-center gap-0.5 p-2 rounded-xl min-w-[62px]
                     transition-colors select-none relative overflow-hidden
-                    ${
-                      isSelected
-                        ? 'border-2 border-indigo-400 animate-tower-selected'
-                        : canAfford
-                          ? 'border border-slate-600/30 hover:border-slate-500/50'
-                          : 'border border-transparent opacity-35'
-                    }
+                    ${isSelected
+                      ? 'border-2 border-indigo-400 animate-tower-selected'
+                      : canAfford
+                        ? 'border border-slate-600/30 hover:border-slate-500/50'
+                        : 'border border-transparent opacity-35'}
                   `}
                   style={
                     isSelected
-                      ? {
-                          background: 'linear-gradient(180deg, rgba(99,102,241,0.25), rgba(79,70,229,0.15))',
-                        }
+                      ? { background: 'linear-gradient(180deg, rgba(99,102,241,0.25), rgba(79,70,229,0.15))' }
                       : canAfford
-                        ? {
-                            background: 'rgba(30,41,59,0.5)',
-                            backdropFilter: 'blur(4px)',
-                          }
+                        ? { background: 'rgba(30,41,59,0.5)', backdropFilter: 'blur(4px)' }
                         : { background: 'rgba(30,41,59,0.25)' }
                   }
                 >
@@ -1395,34 +1588,18 @@ function PlayPageContent() {
                   <span className={`text-[10px] font-medium truncate w-full text-center ${isSelected ? 'text-indigo-200' : 'text-slate-400'}`}>
                     {tower.nameKr}
                   </span>
-                  <span
-                    className="text-[9px] font-bold uppercase tracking-[0.18em] px-1.5 py-px rounded-full"
-                    style={{
-                      color: canAfford ? tower.color : '#64748b',
-                      background: canAfford ? `${tower.color}1c` : 'rgba(51,65,85,0.35)',
-                    }}
-                  >
+                  <span className="text-[9px] font-bold uppercase tracking-[0.18em] px-1.5 py-px rounded-full"
+                    style={{ color: canAfford ? tower.color : '#64748b', background: canAfford ? `${tower.color}1c` : 'rgba(51,65,85,0.35)' }}>
                     {attackBadge}
                   </span>
                   <div className="flex items-center gap-1 text-[9px] font-semibold text-slate-500 tabular-nums">
                     <span className="rounded-full bg-slate-900/70 px-1.5 py-px">D {Math.round(tower.baseStats.damage)}</span>
                     <span className="rounded-full bg-slate-900/70 px-1.5 py-px">R {tower.baseStats.range.toFixed(1)}</span>
                   </div>
-                  <span
-                    className={`text-[10px] font-bold tabular-nums px-1.5 py-px rounded-full ${
-                      isSelected
-                        ? 'text-amber-300 bg-amber-500/15'
-                        : canAfford
-                          ? 'text-amber-400/80'
-                          : 'text-slate-600'
-                    }`}
-                  >
-                    {tower.cost}G
-                  </span>
-                  {/* Selected shine overlay */}
-                  {isSelected && (
-                    <div className="absolute inset-0 btn-shine-overlay opacity-40 pointer-events-none rounded-xl" />
-                  )}
+                  <span className={`text-[10px] font-bold tabular-nums px-1.5 py-px rounded-full ${
+                    isSelected ? 'text-amber-300 bg-amber-500/15' : canAfford ? 'text-amber-400/80' : 'text-slate-600'
+                  }`}>{tower.cost}G</span>
+                  {isSelected && <div className="absolute inset-0 btn-shine-overlay opacity-40 pointer-events-none rounded-xl" />}
                 </motion.button>
               );
             })}

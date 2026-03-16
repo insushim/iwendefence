@@ -2,6 +2,9 @@
 
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 
 import type { GameEngine } from '@/shared/lib/gameEngine';
 import type { Enemy, Tower, TowerType } from '@/shared/types/game';
@@ -154,6 +157,171 @@ function setShadowRecursive(object: THREE.Object3D, cast: boolean, receive: bool
     if (!('castShadow' in mesh)) return;
     mesh.castShadow = cast;
     mesh.receiveShadow = receive;
+  });
+}
+
+function createCanvasTexture(
+  width: number,
+  height: number,
+  painter: (ctx: CanvasRenderingContext2D, width: number, height: number) => void
+): THREE.CanvasTexture {
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Failed to create texture context');
+  painter(ctx, width, height);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  texture.anisotropy = 4;
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
+function createGroundTexture(): THREE.CanvasTexture {
+  return createCanvasTexture(512, 512, (ctx, width, height) => {
+    const grad = ctx.createLinearGradient(0, 0, width, height);
+    grad.addColorStop(0, '#0f2f2b');
+    grad.addColorStop(0.5, '#123833');
+    grad.addColorStop(1, '#0b201d');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, width, height);
+
+    for (let i = 0; i < 220; i++) {
+      const x = Math.random() * width;
+      const y = Math.random() * height;
+      const r = 4 + Math.random() * 18;
+      const alpha = 0.04 + Math.random() * 0.08;
+      ctx.fillStyle = `rgba(94, 234, 212, ${alpha})`;
+      ctx.beginPath();
+      ctx.ellipse(x, y, r, r * (0.45 + Math.random() * 0.35), Math.random() * Math.PI, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    for (let y = 0; y < height; y += 48) {
+      ctx.strokeStyle = 'rgba(255,255,255,0.025)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(width, y);
+      ctx.stroke();
+    }
+  });
+}
+
+function createBoardTexture(): THREE.CanvasTexture {
+  return createCanvasTexture(1024, 768, (ctx, width, height) => {
+    const grad = ctx.createLinearGradient(0, 0, 0, height);
+    grad.addColorStop(0, '#1f3044');
+    grad.addColorStop(0.45, '#162535');
+    grad.addColorStop(1, '#0e1825');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, width, height);
+
+    for (let i = 0; i < 40; i++) {
+      ctx.fillStyle = `rgba(255,255,255,${0.01 + Math.random() * 0.02})`;
+      ctx.fillRect(0, i * 18, width, 2);
+    }
+
+    const vignette = ctx.createRadialGradient(width * 0.5, height * 0.45, height * 0.12, width * 0.5, height * 0.5, height * 0.72);
+    vignette.addColorStop(0, 'rgba(255,255,255,0.05)');
+    vignette.addColorStop(1, 'rgba(0,0,0,0.32)');
+    ctx.fillStyle = vignette;
+    ctx.fillRect(0, 0, width, height);
+  });
+}
+
+function createPathTileTexture(): THREE.CanvasTexture {
+  return createCanvasTexture(256, 256, (ctx, width, height) => {
+    const grad = ctx.createLinearGradient(0, 0, width, height);
+    grad.addColorStop(0, '#9fb4c8');
+    grad.addColorStop(0.5, '#7f95aa');
+    grad.addColorStop(1, '#647a92');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, width, height);
+
+    ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+    ctx.lineWidth = 8;
+    ctx.strokeRect(12, 12, width - 24, height - 24);
+
+    ctx.strokeStyle = 'rgba(15,23,42,0.14)';
+    ctx.lineWidth = 3;
+    for (let i = 0; i < 4; i++) {
+      const x = 40 + i * 42;
+      ctx.beginPath();
+      ctx.moveTo(x, 32 + (i % 2) * 18);
+      ctx.lineTo(x + 12, 90 + i * 12);
+      ctx.lineTo(x - 6, 180 - i * 8);
+      ctx.stroke();
+    }
+
+    ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    ctx.moveTo(width * 0.22, height * 0.72);
+    ctx.lineTo(width * 0.42, height * 0.24);
+    ctx.stroke();
+  });
+}
+
+function createBuildTileTexture(): THREE.CanvasTexture {
+  return createCanvasTexture(256, 256, (ctx, width, height) => {
+    const grad = ctx.createLinearGradient(0, 0, width, height);
+    grad.addColorStop(0, '#2d544b');
+    grad.addColorStop(0.5, '#21443d');
+    grad.addColorStop(1, '#173631');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, width, height);
+
+    for (let y = 0; y < height; y += 64) {
+      for (let x = 0; x < width; x += 64) {
+        ctx.fillStyle = 'rgba(255,255,255,0.025)';
+        ctx.beginPath();
+        ctx.moveTo(x + 32, y + 10);
+        ctx.lineTo(x + 54, y + 32);
+        ctx.lineTo(x + 32, y + 54);
+        ctx.lineTo(x + 10, y + 32);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.strokeStyle = 'rgba(148, 163, 184, 0.08)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+    }
+
+    for (let i = 0; i < 36; i++) {
+      ctx.fillStyle = `rgba(45,212,191,${0.04 + Math.random() * 0.04})`;
+      ctx.fillRect(Math.random() * width, Math.random() * height, 4 + Math.random() * 8, 4 + Math.random() * 8);
+    }
+  });
+}
+
+function createBackdropTexture(): THREE.CanvasTexture {
+  return createCanvasTexture(1024, 512, (ctx, width, height) => {
+    const grad = ctx.createLinearGradient(0, 0, 0, height);
+    grad.addColorStop(0, '#163552');
+    grad.addColorStop(0.45, '#0f2842');
+    grad.addColorStop(1, '#081321');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, width, height);
+
+    for (let i = 0; i < 120; i++) {
+      const x = Math.random() * width;
+      const y = Math.random() * height * 0.75;
+      const size = Math.random() * 2.4;
+      ctx.fillStyle = `rgba(255,255,255,${0.1 + Math.random() * 0.4})`;
+      ctx.beginPath();
+      ctx.arc(x, y, size, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    const haze = ctx.createLinearGradient(0, height * 0.55, 0, height);
+    haze.addColorStop(0, 'rgba(45,212,191,0)');
+    haze.addColorStop(1, 'rgba(45,212,191,0.15)');
+    ctx.fillStyle = haze;
+    ctx.fillRect(0, height * 0.45, width, height * 0.55);
   });
 }
 
@@ -1427,11 +1595,12 @@ function updateEnemyMesh(group: THREE.Group, enemy: Enemy, time: number): void {
   }
 }
 
-function createMapTile(cell: number): THREE.Mesh {
+function createMapTile(cell: number, pathTexture?: THREE.Texture, buildTexture?: THREE.Texture): THREE.Mesh {
   const isPath = cell === 1;
   const isBuild = cell !== 1;
   const material = new THREE.MeshStandardMaterial({
     color: isPath ? 0x7c8ea3 : isBuild ? 0x25463e : 0x17332d,
+    map: isPath ? pathTexture ?? null : isBuild ? buildTexture ?? null : null,
     roughness: isPath ? 0.78 : 0.94,
     metalness: isPath ? 0.08 : 0.02,
   });
@@ -1666,11 +1835,24 @@ export default function ThreeBattlefield({
     scene.add(mapGroup, towerGroup, enemyGroup, projectileGroup, overlayGroup, burstGroup);
     const rows = getEngine()?.getMapData()?.grid.length ?? 10;
     const cols = getEngine()?.getMapData()?.grid[0]?.length ?? 16;
+    const groundTexture = createGroundTexture();
+    groundTexture.repeat.set(2.2, 1.6);
+    const boardTexture = createBoardTexture();
+    boardTexture.repeat.set(1.1, 1);
+    const pathTileTexture = createPathTileTexture();
+    const buildTileTexture = createBuildTileTexture();
+    const backdropTexture = createBackdropTexture();
+
+    const composer = new EffectComposer(renderer);
+    composer.addPass(new RenderPass(scene, camera));
+    const bloomPass = new UnrealBloomPass(new THREE.Vector2(width, height), 0.32, 0.75, 0.9);
+    composer.addPass(bloomPass);
 
     const ground = new THREE.Mesh(
       new THREE.PlaneGeometry(22, 15),
       new THREE.MeshStandardMaterial({
         color: 0x0b2b28,
+        map: groundTexture,
         roughness: 0.98,
         metalness: 0.02,
       })
@@ -1682,7 +1864,7 @@ export default function ThreeBattlefield({
 
     const board = new THREE.Mesh(
       new THREE.BoxGeometry(17.8, 0.32, 11.8),
-      new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.74, metalness: 0.12 })
+      new THREE.MeshStandardMaterial({ color: 0x1e293b, map: boardTexture, roughness: 0.74, metalness: 0.12 })
     );
     board.position.set(7.5, -0.18, 4.5);
     board.receiveShadow = true;
@@ -1690,7 +1872,7 @@ export default function ThreeBattlefield({
 
     const backWall = new THREE.Mesh(
       new THREE.PlaneGeometry(22, 8),
-      new THREE.MeshBasicMaterial({ color: 0x0b223d, transparent: true, opacity: 0.75 })
+      new THREE.MeshBasicMaterial({ map: backdropTexture, transparent: true, opacity: 0.92 })
     );
     backWall.position.set(7.5, 4.2, -2.6);
     scene.add(backWall);
@@ -1753,6 +1935,86 @@ export default function ThreeBattlefield({
     );
     frontLip.position.set(7.5, -0.12, 10.95);
     scene.add(frontLip);
+
+    for (const x of [0.4, 2.8, 5.6, 9.4, 12.2, 14.8]) {
+      const lanternBase = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.08, 0.12, 0.4, 8),
+        new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.82, metalness: 0.16 })
+      );
+      lanternBase.position.set(x, 0.22, -0.95);
+      scene.add(lanternBase);
+
+      const lanternGlow = new THREE.Mesh(
+        new THREE.SphereGeometry(0.12, 12, 12),
+        new THREE.MeshStandardMaterial({ color: 0xfef08a, emissive: 0xf59e0b, emissiveIntensity: 1.1 })
+      );
+      lanternGlow.position.set(x, 0.52, -0.95);
+      scene.add(lanternGlow);
+    }
+
+    for (let i = 0; i < 12; i++) {
+      const crystal = new THREE.Mesh(
+        new THREE.OctahedronGeometry(0.16 + (i % 3) * 0.03, 0),
+        new THREE.MeshStandardMaterial({ color: 0x67e8f9, emissive: 0x22d3ee, emissiveIntensity: 0.45, roughness: 0.18, metalness: 0.22 })
+      );
+      const side = i % 2 === 0 ? -1.35 : 16.35;
+      const z = 0.4 + (i % 6) * 1.75;
+      crystal.position.set(side, 0.28 + (i % 2) * 0.08, z);
+      crystal.scale.set(0.7, 1.4, 0.7);
+      crystal.rotation.y = i * 0.7;
+      scene.add(crystal);
+    }
+
+    const edgeGlowMat = new THREE.MeshBasicMaterial({ color: 0x22d3ee, transparent: true, opacity: 0.16, side: THREE.DoubleSide });
+    const edgeGlows: THREE.Mesh[] = [];
+    for (const z of [-0.98, 9.98]) {
+      const strip = new THREE.Mesh(new THREE.PlaneGeometry(17.4, 0.18), edgeGlowMat.clone());
+      strip.position.set(7.5, 0.16, z);
+      strip.rotation.x = -Math.PI / 2;
+      scene.add(strip);
+      edgeGlows.push(strip);
+    }
+    for (const x of [-0.98, 15.98]) {
+      const strip = new THREE.Mesh(new THREE.PlaneGeometry(0.18, 10.8), edgeGlowMat.clone());
+      strip.position.set(x, 0.16, 4.5);
+      strip.rotation.x = -Math.PI / 2;
+      scene.add(strip);
+      edgeGlows.push(strip);
+    }
+
+    const fogCards: THREE.Mesh[] = [];
+    for (let i = 0; i < 5; i++) {
+      const fogCard = new THREE.Mesh(
+        new THREE.PlaneGeometry(6.5 + i * 0.8, 2.6 + i * 0.35),
+        new THREE.MeshBasicMaterial({ color: 0x67e8f9, transparent: true, opacity: 0.05 + i * 0.012, depthWrite: false })
+      );
+      fogCard.position.set(2 + i * 3.1, 1.2 + i * 0.2, 8.8 - i * 1.4);
+      fogCard.rotation.x = -Math.PI / 2.8;
+      scene.add(fogCard);
+      fogCards.push(fogCard);
+    }
+
+    const particleCount = 180;
+    const particlePositions = new Float32Array(particleCount * 3);
+    const particleOffsets = new Float32Array(particleCount);
+    for (let i = 0; i < particleCount; i++) {
+      particlePositions[i * 3] = -1 + Math.random() * 17;
+      particlePositions[i * 3 + 1] = 0.25 + Math.random() * 2.8;
+      particlePositions[i * 3 + 2] = -0.8 + Math.random() * 11;
+      particleOffsets[i] = Math.random() * Math.PI * 2;
+    }
+    const particleGeometry = new THREE.BufferGeometry();
+    particleGeometry.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
+    const particleMaterial = new THREE.PointsMaterial({
+      color: 0xa5f3fc,
+      size: 0.06,
+      transparent: true,
+      opacity: 0.42,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    const ambientParticles = new THREE.Points(particleGeometry, particleMaterial);
+    scene.add(ambientParticles);
 
     const towerMeshes = new Map<string, THREE.Group>();
     const enemyMeshes = new Map<string, THREE.Group>();
@@ -1949,7 +2211,7 @@ export default function ThreeBattlefield({
           terrainBase.position.set(col + 0.5, -terrainHeight * 0.5 + (cell === 1 ? 0.01 : 0), rows - row - 0.5);
           mapGroup.add(terrainBase);
 
-          const tile = createMapTile(cell);
+          const tile = createMapTile(cell, pathTileTexture, buildTileTexture);
           tile.position.set(col + 0.5, terrainHeight + (cell === 1 ? 0.01 : 0), rows - row - 0.5);
           tile.userData.row = row;
           tile.userData.col = col;
@@ -2527,6 +2789,33 @@ export default function ThreeBattlefield({
         (rightGlow.material as THREE.MeshBasicMaterial).color.setHex(bossDangerLevel > 0.1 ? 0xef4444 : 0x0f766e);
         (sideGlow.material as THREE.MeshBasicMaterial).opacity = 0.2 + bossDangerLevel * 0.12;
         (rightGlow.material as THREE.MeshBasicMaterial).opacity = 0.2 + bossDangerLevel * 0.12;
+        bloomPass.strength = 0.28 + bossDangerLevel * 0.24;
+        bloomPass.radius = 0.72 + bossDangerLevel * 0.08;
+        for (let i = 0; i < edgeGlows.length; i++) {
+          const glow = edgeGlows[i];
+          const mat = glow.material as THREE.MeshBasicMaterial;
+          mat.opacity = 0.12 + (Math.sin(frame * 0.05 + i * 0.8) + 1) * 0.03 + bossDangerLevel * 0.08;
+          glow.position.y = 0.16 + Math.sin(frame * 0.03 + i) * 0.01;
+        }
+        for (let i = 0; i < fogCards.length; i++) {
+          const fogCard = fogCards[i];
+          const mat = fogCard.material as THREE.MeshBasicMaterial;
+          fogCard.position.x += Math.sin(frame * 0.002 + i) * 0.002;
+          fogCard.position.z += Math.cos(frame * 0.0025 + i * 0.4) * 0.002;
+          fogCard.rotation.z += 0.0008 * (i % 2 === 0 ? 1 : -1);
+          mat.opacity = 0.035 + (Math.sin(frame * 0.015 + i) + 1) * 0.018 + bossDangerLevel * 0.02;
+        }
+        const particleAttr = ambientParticles.geometry.getAttribute('position') as THREE.BufferAttribute;
+        for (let i = 0; i < particleCount; i++) {
+          const baseIndex = i * 3;
+          particleAttr.array[baseIndex + 1] += Math.sin(frame * 0.015 + particleOffsets[i]) * 0.002;
+          particleAttr.array[baseIndex] += Math.cos(frame * 0.01 + particleOffsets[i]) * 0.0015;
+          if (particleAttr.array[baseIndex + 1] > 3.4) particleAttr.array[baseIndex + 1] = 0.25;
+          if (particleAttr.array[baseIndex] > 16.5) particleAttr.array[baseIndex] = -0.5;
+          if (particleAttr.array[baseIndex] < -0.5) particleAttr.array[baseIndex] = 16.5;
+        }
+        particleAttr.needsUpdate = true;
+        particleMaterial.opacity = 0.3 + bossDangerLevel * 0.12;
         for (const pad of buildPads) {
           const pulse = 0.16 + (Math.sin(frame * 0.05 + pad.position.x * 0.9) + 1) * 0.05;
           (pad.material as THREE.MeshBasicMaterial).opacity = pulse;
@@ -2547,7 +2836,7 @@ export default function ThreeBattlefield({
         }
       }
 
-      renderer.render(scene, camera);
+      composer.render();
       raf = requestAnimationFrame(animate);
     };
 
@@ -2559,6 +2848,22 @@ export default function ThreeBattlefield({
       renderer.domElement.removeEventListener('pointerleave', handlePointerLeave);
       renderer.domElement.removeEventListener('pointerdown', handlePointerDown);
       renderer.setAnimationLoop(null);
+      composer.dispose();
+      particleGeometry.dispose();
+      particleMaterial.dispose();
+      for (const glow of edgeGlows) {
+        const mat = glow.material;
+        if (mat instanceof THREE.Material) mat.dispose();
+      }
+      for (const fogCard of fogCards) {
+        const mat = fogCard.material;
+        if (mat instanceof THREE.Material) mat.dispose();
+      }
+      groundTexture.dispose();
+      boardTexture.dispose();
+      pathTileTexture.dispose();
+      buildTileTexture.dispose();
+      backdropTexture.dispose();
       renderer.dispose();
       renderer.forceContextLoss();
       host.innerHTML = '';

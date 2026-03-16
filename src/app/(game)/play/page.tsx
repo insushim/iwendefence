@@ -1112,7 +1112,7 @@ function PlayPageContent() {
       </div>
 
       {/* Control Bar */}
-      <div className="glass-dark safe-area-pb">
+      <div className="glass-dark safe-area-pb relative shrink-0">
         <div className="flex items-center gap-2 px-3 py-2" style={{ borderBottom: '1px solid rgba(71,85,105,0.15)' }}>
           <a href="/adventure">
             <div className="w-9 h-9 rounded-xl ctrl-btn-glass flex items-center justify-center">
@@ -1216,74 +1216,79 @@ function PlayPageContent() {
         </div>
 
         {selectedPlacedTower && (
-          <div className="px-3 py-2 border-b border-slate-800/40 bg-slate-950/40">
-            <div className="flex items-center justify-between mb-2">
-              <div>
-                <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Tower Paths</div>
-                <div className="flex items-center gap-2">
-                  <span className="text-lg leading-none">{selectedPlacedTowerDef?.icon}</span>
-                  <div className="text-sm font-bold text-white">{selectedPlacedTowerDef?.nameKr ?? selectedPlacedTower.type}</div>
-                  <span
-                    className="text-[9px] font-black uppercase tracking-[0.2em] px-2 py-1 rounded-full"
-                    style={{
-                      color: selectedPlacedTowerDef?.color ?? '#94a3b8',
-                      background: `${selectedPlacedTowerDef?.color ?? '#94a3b8'}18`,
-                    }}
-                  >
-                    {selectedPlacedTowerDef ? getAttackTypeLabel(selectedPlacedTowerDef.attackType) : 'Tower'}
-                  </span>
+          <div className="absolute inset-x-0 bottom-full z-20 px-3 pb-2">
+            <div
+              className="rounded-3xl border border-slate-700/50 bg-slate-950/90 px-3 py-2 shadow-2xl backdrop-blur-xl"
+              style={{ boxShadow: '0 -10px 30px rgba(2,6,23,0.45)' }}
+            >
+              <div className="flex items-center justify-between mb-2">
+                <div>
+                  <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Tower Paths</div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg leading-none">{selectedPlacedTowerDef?.icon}</span>
+                    <div className="text-sm font-bold text-white">{selectedPlacedTowerDef?.nameKr ?? selectedPlacedTower.type}</div>
+                    <span
+                      className="text-[9px] font-black uppercase tracking-[0.2em] px-2 py-1 rounded-full"
+                      style={{
+                        color: selectedPlacedTowerDef?.color ?? '#94a3b8',
+                        background: `${selectedPlacedTowerDef?.color ?? '#94a3b8'}18`,
+                      }}
+                    >
+                      {selectedPlacedTowerDef ? getAttackTypeLabel(selectedPlacedTowerDef.attackType) : 'Tower'}
+                    </span>
+                  </div>
                 </div>
+                <div className="text-[11px] text-amber-300 font-bold">{gold}G</div>
               </div>
-              <div className="text-[11px] text-amber-300 font-bold">{gold}G</div>
-            </div>
-            <div className="grid grid-cols-4 gap-2 mb-2">
-              {[
-                { label: 'DMG', value: Math.round(selectedPlacedTower.stats.damage) },
-                { label: 'RNG', value: selectedPlacedTower.stats.range.toFixed(1) },
-                { label: 'SPD', value: selectedPlacedTower.stats.attackSpeed.toFixed(2) },
-                { label: 'CRIT', value: `${Math.round(selectedPlacedTower.stats.critChance * 100)}%` },
-              ].map((stat) => (
-                <div
-                  key={stat.label}
-                  className="rounded-2xl px-2 py-2"
-                  style={{
-                    background: 'linear-gradient(180deg, rgba(15,23,42,0.86), rgba(15,23,42,0.58))',
-                    border: '1px solid rgba(71,85,105,0.18)',
-                  }}
-                >
-                  <div className="text-[9px] uppercase tracking-[0.2em] text-slate-500">{stat.label}</div>
-                  <div className="text-sm font-black text-white">{stat.value}</div>
-                </div>
-              ))}
-            </div>
-            <div className="grid grid-cols-3 gap-2">
-              {getTowerPathInfos(selectedPlacedTower.type).map((pathInfo) => {
-                const currentTier = selectedPlacedTower.upgradePaths?.[pathInfo.path] ?? 0;
-                const pathUpgrades = getUpgradePath(selectedPlacedTower.type, pathInfo.path);
-                const nextUpgrade = pathUpgrades[currentTier];
-                const allowed = canUpgrade(selectedPlacedTower.type, selectedPlacedTower.upgradePaths ?? [0, 0, 0], pathInfo.path);
-                const affordable = !!nextUpgrade && gold >= nextUpgrade.cost;
-
-                return (
-                  <button
-                    key={`${selectedPlacedTower.id}-${pathInfo.path}`}
-                    onClick={() => handleTowerBranchUpgrade(pathInfo.path)}
-                    disabled={!nextUpgrade || !allowed || !affordable}
-                    className="rounded-2xl border px-2 py-2 text-left disabled:opacity-40"
+              <div className="grid grid-cols-4 gap-2 mb-2">
+                {[
+                  { label: 'DMG', value: Math.round(selectedPlacedTower.stats.damage) },
+                  { label: 'RNG', value: selectedPlacedTower.stats.range.toFixed(1) },
+                  { label: 'SPD', value: selectedPlacedTower.stats.attackSpeed.toFixed(2) },
+                  { label: 'CRIT', value: `${Math.round(selectedPlacedTower.stats.critChance * 100)}%` },
+                ].map((stat) => (
+                  <div
+                    key={stat.label}
+                    className="rounded-2xl px-2 py-2"
                     style={{
-                      borderColor: allowed ? 'rgba(148,163,184,0.24)' : 'rgba(71,85,105,0.2)',
-                      background: 'linear-gradient(180deg, rgba(15,23,42,0.75), rgba(15,23,42,0.45))',
+                      background: 'linear-gradient(180deg, rgba(15,23,42,0.86), rgba(15,23,42,0.58))',
+                      border: '1px solid rgba(71,85,105,0.18)',
                     }}
                   >
-                    <div className="flex items-center justify-between text-xs mb-1">
-                      <span className="text-slate-200 font-bold">{pathInfo.name}</span>
-                      <span className="text-indigo-300">{currentTier}/5</span>
-                    </div>
-                    <div className="text-[10px] text-slate-500 mb-2">{nextUpgrade ? nextUpgrade.name : 'MAXED'}</div>
-                    <div className="text-[10px] text-amber-300 font-bold">{nextUpgrade ? `${nextUpgrade.cost}G` : 'LOCK'}</div>
-                  </button>
-                );
-              })}
+                    <div className="text-[9px] uppercase tracking-[0.2em] text-slate-500">{stat.label}</div>
+                    <div className="text-sm font-black text-white">{stat.value}</div>
+                  </div>
+                ))}
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                {getTowerPathInfos(selectedPlacedTower.type).map((pathInfo) => {
+                  const currentTier = selectedPlacedTower.upgradePaths?.[pathInfo.path] ?? 0;
+                  const pathUpgrades = getUpgradePath(selectedPlacedTower.type, pathInfo.path);
+                  const nextUpgrade = pathUpgrades[currentTier];
+                  const allowed = canUpgrade(selectedPlacedTower.type, selectedPlacedTower.upgradePaths ?? [0, 0, 0], pathInfo.path);
+                  const affordable = !!nextUpgrade && gold >= nextUpgrade.cost;
+
+                  return (
+                    <button
+                      key={`${selectedPlacedTower.id}-${pathInfo.path}`}
+                      onClick={() => handleTowerBranchUpgrade(pathInfo.path)}
+                      disabled={!nextUpgrade || !allowed || !affordable}
+                      className="rounded-2xl border px-2 py-2 text-left disabled:opacity-40"
+                      style={{
+                        borderColor: allowed ? 'rgba(148,163,184,0.24)' : 'rgba(71,85,105,0.2)',
+                        background: 'linear-gradient(180deg, rgba(15,23,42,0.75), rgba(15,23,42,0.45))',
+                      }}
+                    >
+                      <div className="flex items-center justify-between text-xs mb-1">
+                        <span className="text-slate-200 font-bold">{pathInfo.name}</span>
+                        <span className="text-indigo-300">{currentTier}/5</span>
+                      </div>
+                      <div className="text-[10px] text-slate-500 mb-2">{nextUpgrade ? nextUpgrade.name : 'MAXED'}</div>
+                      <div className="text-[10px] text-amber-300 font-bold">{nextUpgrade ? `${nextUpgrade.cost}G` : 'LOCK'}</div>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
         )}

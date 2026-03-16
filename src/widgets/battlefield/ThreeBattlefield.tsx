@@ -7,7 +7,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 
 import type { GameEngine } from '@/shared/lib/gameEngine';
-import type { Enemy, Tower, TowerType } from '@/shared/types/game';
+import type { Enemy, EnvironmentType, Tower, TowerType } from '@/shared/types/game';
 import type { PlacementInfo } from '@/shared/lib/renderer';
 
 interface ThreeBattlefieldProps {
@@ -15,6 +15,7 @@ interface ThreeBattlefieldProps {
   height: number;
   cellSize: number;
   getEngine: () => GameEngine | null;
+  environment: EnvironmentType;
   selectedTowerId: string | null;
   placementInfo: PlacementInfo | null;
   onTileHover?: (row: number, col: number) => void;
@@ -120,6 +121,32 @@ const FLYING_TYPES = new Set(['BAT', 'HARPY', 'DRAGON_WHELP', 'GARGOYLE', 'PHOEN
 const ARMORED_TYPES = new Set(['KNIGHT', 'GOLEM', 'SHIELD_BEARER', 'IRON_TURTLE', 'ARMORED_ORC']);
 const CASTER_TYPES = new Set(['WIZARD', 'DARK_MAGE', 'SPIRIT', 'ENCHANTRESS', 'PHANTOM']);
 
+const ENVIRONMENT_VISUALS: Record<EnvironmentType, {
+  groundA: string;
+  groundB: string;
+  boardA: string;
+  boardB: string;
+  pathA: string;
+  pathB: string;
+  buildA: string;
+  buildB: string;
+  backdropTop: string;
+  backdropBottom: string;
+  glow: number;
+  fog: number;
+}> = {
+  forest: { groundA: '#0f2f2b', groundB: '#123833', boardA: '#1f3044', boardB: '#162535', pathA: '#9fb4c8', pathB: '#647a92', buildA: '#2d544b', buildB: '#173631', backdropTop: '#163552', backdropBottom: '#081321', glow: 0x22d3ee, fog: 0x071525 },
+  desert: { groundA: '#5a4326', groundB: '#3f2d1b', boardA: '#6b5a42', boardB: '#473927', pathA: '#dbc7a1', pathB: '#b79a68', buildA: '#70593a', buildB: '#523f28', backdropTop: '#8a6232', backdropBottom: '#2f1f15', glow: 0xf59e0b, fog: 0x24150a },
+  snow: { groundA: '#d5edf9', groundB: '#8ec5dd', boardA: '#6b8ca5', boardB: '#47657c', pathA: '#eff7ff', pathB: '#a8c9df', buildA: '#9ec2d5', buildB: '#6d96aa', backdropTop: '#7cc4f8', backdropBottom: '#11263d', glow: 0x93c5fd, fog: 0x0f2238 },
+  volcano: { groundA: '#3a1917', groundB: '#1f0d0c', boardA: '#522320', boardB: '#291110', pathA: '#786561', pathB: '#483734', buildA: '#3e2320', buildB: '#241210', backdropTop: '#6e1d12', backdropBottom: '#130809', glow: 0xf97316, fog: 0x1a0908 },
+  ocean: { groundA: '#0d3b52', groundB: '#09293b', boardA: '#174d69', boardB: '#10344a', pathA: '#9fdbf3', pathB: '#5395b4', buildA: '#1c5b63', buildB: '#123f46', backdropTop: '#0f6ea9', backdropBottom: '#081826', glow: 0x38bdf8, fog: 0x071827 },
+  sky: { groundA: '#335d7a', groundB: '#203b52', boardA: '#6b8fbc', boardB: '#49698d', pathA: '#edf6ff', pathB: '#aac5ea', buildA: '#7697bd', buildB: '#456382', backdropTop: '#7bc8ff', backdropBottom: '#1c3554', glow: 0xa78bfa, fog: 0x15243a },
+  dungeon: { groundA: '#232632', groundB: '#141823', boardA: '#363d4d', boardB: '#202535', pathA: '#8c95a5', pathB: '#576072', buildA: '#2d3342', buildB: '#191d2a', backdropTop: '#1d2230', backdropBottom: '#090b11', glow: 0x818cf8, fog: 0x090b12 },
+  swamp: { groundA: '#223424', groundB: '#162014', boardA: '#374530', boardB: '#27321f', pathA: '#94a57a', pathB: '#65724e', buildA: '#3b5534', buildB: '#24351f', backdropTop: '#3e5b25', backdropBottom: '#0b130a', glow: 0x84cc16, fog: 0x0b1209 },
+  ruins: { groundA: '#3b3125', groundB: '#241d15', boardA: '#5b5043', boardB: '#3b3227', pathA: '#cbbfa9', pathB: '#8c7b65', buildA: '#615647', buildB: '#42392f', backdropTop: '#6f6047', backdropBottom: '#17120d', glow: 0xd97706, fog: 0x18120d },
+  void: { groundA: '#1b1433', groundB: '#0c0817', boardA: '#2a2050', boardB: '#16102f', pathA: '#bca7ff', pathB: '#6f59b5', buildA: '#3b2a62', buildB: '#1a1030', backdropTop: '#352065', backdropBottom: '#07040f', glow: 0x8b5cf6, fog: 0x07040f },
+};
+
 function worldPositionFromCanvas(x: number, y: number, cellSize: number, rows: number): THREE.Vector3 {
   return new THREE.Vector3(x / cellSize, 0, rows - y / cellSize);
 }
@@ -179,12 +206,12 @@ function createCanvasTexture(
   return texture;
 }
 
-function createGroundTexture(): THREE.CanvasTexture {
+function createGroundTexture(theme: (typeof ENVIRONMENT_VISUALS)[EnvironmentType]): THREE.CanvasTexture {
   return createCanvasTexture(512, 512, (ctx, width, height) => {
     const grad = ctx.createLinearGradient(0, 0, width, height);
-    grad.addColorStop(0, '#0f2f2b');
-    grad.addColorStop(0.5, '#123833');
-    grad.addColorStop(1, '#0b201d');
+    grad.addColorStop(0, theme.groundA);
+    grad.addColorStop(0.5, theme.groundB);
+    grad.addColorStop(1, theme.groundA);
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, width, height);
 
@@ -210,12 +237,12 @@ function createGroundTexture(): THREE.CanvasTexture {
   });
 }
 
-function createBoardTexture(): THREE.CanvasTexture {
+function createBoardTexture(theme: (typeof ENVIRONMENT_VISUALS)[EnvironmentType]): THREE.CanvasTexture {
   return createCanvasTexture(1024, 768, (ctx, width, height) => {
     const grad = ctx.createLinearGradient(0, 0, 0, height);
-    grad.addColorStop(0, '#1f3044');
-    grad.addColorStop(0.45, '#162535');
-    grad.addColorStop(1, '#0e1825');
+    grad.addColorStop(0, theme.boardA);
+    grad.addColorStop(0.45, theme.boardB);
+    grad.addColorStop(1, theme.boardA);
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, width, height);
 
@@ -232,12 +259,12 @@ function createBoardTexture(): THREE.CanvasTexture {
   });
 }
 
-function createPathTileTexture(): THREE.CanvasTexture {
+function createPathTileTexture(theme: (typeof ENVIRONMENT_VISUALS)[EnvironmentType]): THREE.CanvasTexture {
   return createCanvasTexture(256, 256, (ctx, width, height) => {
     const grad = ctx.createLinearGradient(0, 0, width, height);
-    grad.addColorStop(0, '#9fb4c8');
-    grad.addColorStop(0.5, '#7f95aa');
-    grad.addColorStop(1, '#647a92');
+    grad.addColorStop(0, theme.pathA);
+    grad.addColorStop(0.5, theme.pathB);
+    grad.addColorStop(1, theme.pathB);
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, width, height);
 
@@ -265,12 +292,12 @@ function createPathTileTexture(): THREE.CanvasTexture {
   });
 }
 
-function createBuildTileTexture(): THREE.CanvasTexture {
+function createBuildTileTexture(theme: (typeof ENVIRONMENT_VISUALS)[EnvironmentType]): THREE.CanvasTexture {
   return createCanvasTexture(256, 256, (ctx, width, height) => {
     const grad = ctx.createLinearGradient(0, 0, width, height);
-    grad.addColorStop(0, '#2d544b');
-    grad.addColorStop(0.5, '#21443d');
-    grad.addColorStop(1, '#173631');
+    grad.addColorStop(0, theme.buildA);
+    grad.addColorStop(0.5, theme.buildB);
+    grad.addColorStop(1, theme.buildB);
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, width, height);
 
@@ -298,12 +325,12 @@ function createBuildTileTexture(): THREE.CanvasTexture {
   });
 }
 
-function createBackdropTexture(): THREE.CanvasTexture {
+function createBackdropTexture(theme: (typeof ENVIRONMENT_VISUALS)[EnvironmentType]): THREE.CanvasTexture {
   return createCanvasTexture(1024, 512, (ctx, width, height) => {
     const grad = ctx.createLinearGradient(0, 0, 0, height);
-    grad.addColorStop(0, '#163552');
-    grad.addColorStop(0.45, '#0f2842');
-    grad.addColorStop(1, '#081321');
+    grad.addColorStop(0, theme.backdropTop);
+    grad.addColorStop(0.45, theme.backdropTop);
+    grad.addColorStop(1, theme.backdropBottom);
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, width, height);
 
@@ -812,6 +839,51 @@ function createPedestal(color: number): THREE.Group {
   return group;
 }
 
+function addTowerSilhouetteAccent(group: THREE.Group, color: number, type: TowerType): void {
+  const finMaterial = standardMaterial(0xe2e8f0, color, 0.22);
+  for (let i = 0; i < 4; i++) {
+    const fin = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.28, 0.12), finMaterial);
+    const angle = (Math.PI / 2) * i + Math.PI / 4;
+    fin.position.set(Math.cos(angle) * 0.24, 0.46, Math.sin(angle) * 0.24);
+    fin.rotation.y = angle;
+    group.add(fin);
+  }
+
+  const crown = new THREE.Mesh(
+    new THREE.TorusGeometry(0.18, 0.018, 8, 24),
+    new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: color, emissiveIntensity: 0.48 })
+  );
+  crown.rotation.x = Math.PI / 2;
+  crown.position.y = 0.34;
+  group.add(crown);
+
+  if (type === 'ARCHER' || type === 'SNIPER' || type === 'CANNON' || type === 'METEOR') {
+    for (const z of [-0.13, 0.13]) {
+      const vane = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.08, 0.04), standardMaterial(0x0f172a, color, 0.12));
+      vane.position.set(-0.08, 0.82, z);
+      vane.rotation.z = 0.18;
+      group.add(vane);
+    }
+  } else if (type === 'MAGIC' || type === 'WORD' || type === 'DIVINE' || type === 'CHRONO' || type === 'VOID') {
+    const halo = new THREE.Mesh(new THREE.TorusKnotGeometry(0.11, 0.015, 64, 8), standardMaterial(0xffffff, color, 0.72));
+    halo.position.y = 1.02;
+    halo.rotation.x = Math.PI / 2;
+    halo.userData.accentOrbit = true;
+    group.add(halo);
+  } else if (type === 'FLAME' || type === 'PHOENIX' || type === 'HEALER') {
+    for (const x of [-0.2, 0.2]) {
+      const wing = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.34, 0.16), standardMaterial(0xffffff, color, 0.28));
+      wing.position.set(x, 0.72, 0);
+      wing.rotation.z = x < 0 ? 0.45 : -0.45;
+      group.add(wing);
+    }
+  } else {
+    const brace = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.08, 0.44), standardMaterial(0x0f172a, color, 0.12));
+    brace.position.y = 0.28;
+    group.add(brace);
+  }
+}
+
 function createArcherTower(color: number): THREE.Group {
   const group = createPedestal(color);
   const wood = standardMaterial(0x6b4423);
@@ -1251,9 +1323,43 @@ function createTowerMesh(type: TowerType, selected: boolean): THREE.Group {
       break;
   }
 
+  addTowerSilhouetteAccent(group, color, type);
   if (selected) addSelectionRing(group, color);
   setShadowRecursive(group, true, true);
   return group;
+}
+
+function addEnemySilhouetteAccent(group: THREE.Group, color: number, elite: boolean, type: Enemy['type']): void {
+  const glowColor = elite ? 0xfacc15 : color;
+  const spineMat = enemyMaterial(0x0f172a, glowColor, elite ? 0.32 : 0.14);
+  const gemMat = enemyMaterial(0xffffff, glowColor, elite ? 0.78 : 0.42);
+
+  for (let i = 0; i < 3; i++) {
+    const spine = new THREE.Mesh(new THREE.ConeGeometry(0.035 + i * 0.006, 0.13 + i * 0.02, 5), spineMat);
+    spine.position.set(0, 0.34 + i * 0.18, -0.12 - i * 0.02);
+    spine.rotation.x = -0.6;
+    group.add(spine);
+  }
+
+  const chestGem = new THREE.Mesh(new THREE.OctahedronGeometry(BOSS_TYPES.has(type) ? 0.08 : 0.05, 0), gemMat);
+  chestGem.position.set(0, BOSS_TYPES.has(type) ? 0.62 : 0.42, 0.14);
+  group.add(chestGem);
+
+  if (CASTER_TYPES.has(type) || type === 'SPIRIT' || type === 'PHANTOM') {
+    for (const x of [-0.14, 0.14]) {
+      const wisp = new THREE.Mesh(new THREE.SphereGeometry(0.045, 10, 10), enemyMaterial(0xffffff, glowColor, 0.72));
+      wisp.position.set(x, 0.9, 0);
+      wisp.userData.enemyWisp = x < 0 ? -1 : 1;
+      group.add(wisp);
+    }
+  }
+
+  if (FLYING_TYPES.has(type)) {
+    const tailFin = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.22, 4), spineMat);
+    tailFin.position.set(-0.22, 0.46, 0);
+    tailFin.rotation.z = Math.PI / 2;
+    group.add(tailFin);
+  }
 }
 
 function createHumanoidEnemy(color: number, elite: boolean): THREE.Group {
@@ -1563,7 +1669,108 @@ function createEnemyMesh(enemy: Enemy): THREE.Group {
     group.add(shield);
   }
 
+  addEnemySilhouetteAccent(group, color, !!enemy.isElite, enemy.type);
   setShadowRecursive(group, true, true);
+  return group;
+}
+
+function createEnvironmentProp(environment: EnvironmentType, glow: number, variant: number): THREE.Group {
+  const group = new THREE.Group();
+  const frame = variant * 0.7;
+  group.userData.floatSeed = frame;
+
+  if (environment === 'forest' || environment === 'swamp') {
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.11, 0.7, 8), standardMaterial(0x5b3b1d));
+    trunk.position.y = 0.35;
+    group.add(trunk);
+
+    const canopy = new THREE.Mesh(
+      new THREE.OctahedronGeometry(environment === 'swamp' ? 0.26 : 0.32, 0),
+      standardMaterial(environment === 'swamp' ? 0x3f6212 : 0x16a34a, glow, 0.18)
+    );
+    canopy.position.y = 0.86;
+    canopy.scale.set(1, 1.25, 1);
+    group.add(canopy);
+
+    const mushroom = new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 10), standardMaterial(0xf87171, glow, 0.2));
+    mushroom.position.set(0.18, 0.08, 0.08);
+    mushroom.scale.set(1, 0.55, 1);
+    group.add(mushroom);
+  } else if (environment === 'desert' || environment === 'ruins') {
+    const obelisk = new THREE.Mesh(
+      new THREE.BoxGeometry(0.22, 0.92, 0.22),
+      standardMaterial(environment === 'desert' ? 0xcaa472 : 0x8b7355, glow, 0.08)
+    );
+    obelisk.position.y = 0.46;
+    obelisk.rotation.z = variant % 2 === 0 ? 0.08 : -0.06;
+    group.add(obelisk);
+
+    const cap = new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.24, 4), standardMaterial(0xe2c58b));
+    cap.position.y = 1.04;
+    group.add(cap);
+
+    const ribbon = new THREE.Mesh(new THREE.PlaneGeometry(0.16, 0.4), basicGlow(glow, 0.18));
+    ribbon.position.set(0.12, 0.66, 0);
+    ribbon.rotation.y = Math.PI / 4;
+    group.add(ribbon);
+  } else if (environment === 'snow' || environment === 'sky') {
+    const shard = new THREE.Mesh(new THREE.OctahedronGeometry(0.2, 0), standardMaterial(0xe0f2fe, glow, 0.45));
+    shard.position.y = 0.44;
+    shard.scale.set(0.8, 1.8, 0.8);
+    group.add(shard);
+
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.02, 8, 24), standardMaterial(0xffffff, glow, 0.52));
+    ring.rotation.x = Math.PI / 2;
+    ring.position.y = 0.18;
+    ring.userData.propRing = true;
+    group.add(ring);
+  } else if (environment === 'volcano' || environment === 'void') {
+    for (let i = 0; i < 3; i++) {
+      const shard = new THREE.Mesh(
+        new THREE.OctahedronGeometry(0.12 + i * 0.04, 0),
+        standardMaterial(environment === 'volcano' ? 0x431407 : 0x1e1b4b, glow, 0.36)
+      );
+      shard.position.set((i - 1) * 0.12, 0.22 + i * 0.18, 0);
+      shard.scale.set(0.7, 1.8, 0.7);
+      group.add(shard);
+    }
+    const rune = new THREE.Mesh(new THREE.RingGeometry(0.14, 0.2, 20), basicGlow(glow, 0.22));
+    rune.rotation.x = -Math.PI / 2;
+    rune.position.y = 0.06;
+    group.add(rune);
+  } else if (environment === 'ocean') {
+    const coral = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, 0.58, 7), standardMaterial(0x0f766e, glow, 0.18));
+    coral.position.y = 0.28;
+    coral.rotation.z = 0.2;
+    group.add(coral);
+
+    for (const x of [-0.12, 0.1]) {
+      const branch = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.05, 0.32, 6), standardMaterial(0x2dd4bf, glow, 0.2));
+      branch.position.set(x, 0.44, 0);
+      branch.rotation.z = x < 0 ? -0.55 : 0.45;
+      group.add(branch);
+    }
+
+    const pearl = new THREE.Mesh(new THREE.SphereGeometry(0.06, 10, 10), standardMaterial(0xffffff, glow, 0.45));
+    pearl.position.set(0.12, 0.12, 0.08);
+    group.add(pearl);
+  } else {
+    const brazier = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.2, 0.2, 10), standardMaterial(0x334155));
+    brazier.position.y = 0.14;
+    group.add(brazier);
+
+    const flame = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.34, 8), standardMaterial(0xffffff, glow, 0.9));
+    flame.position.y = 0.46;
+    flame.userData.propFlame = true;
+    group.add(flame);
+
+    for (const x of [-0.16, 0.16]) {
+      const pillar = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.52, 0.06), standardMaterial(0x475569));
+      pillar.position.set(x, 0.22, 0);
+      group.add(pillar);
+    }
+  }
+
   return group;
 }
 
@@ -1591,6 +1798,14 @@ function updateEnemyMesh(group: THREE.Group, enemy: Enemy, time: number): void {
     if (leftWing && rightWing) {
       leftWing.rotation.z = 0.2 + Math.sin(time * 16) * 0.35;
       rightWing.rotation.z = -0.2 - Math.sin(time * 16) * 0.35;
+    }
+  }
+
+  for (const child of group.children) {
+    if (child.userData.enemyWisp) {
+      const side = child.userData.enemyWisp as number;
+      child.position.x = side * (0.14 + Math.sin(time * 4.5) * 0.04);
+      child.position.y = 0.9 + Math.cos(time * 5.5 + side) * 0.04;
     }
   }
 }
@@ -1637,6 +1852,12 @@ function createProjectileMesh(color: number): THREE.Group {
 
 function applyTowerIdleMotion(mesh: THREE.Group, tower: Tower, frame: number): void {
   const t = frame * 0.04 + tower.position.col * 0.7 + tower.position.row * 0.35;
+  for (const child of mesh.children) {
+    if (child.userData.accentOrbit) {
+      child.rotation.z += 0.025;
+      child.position.y = 1.02 + Math.sin(t * 1.2) * 0.04;
+    }
+  }
   switch (tower.type) {
     case 'MAGIC':
     case 'DIVINE':
@@ -1739,6 +1960,7 @@ export default function ThreeBattlefield({
   height,
   cellSize,
   getEngine,
+  environment,
   selectedTowerId,
   placementInfo,
   onTileHover,
@@ -1787,8 +2009,9 @@ export default function ThreeBattlefield({
     host.innerHTML = '';
     host.appendChild(renderer.domElement);
 
+    const theme = ENVIRONMENT_VISUALS[environment];
     const scene = new THREE.Scene();
-    scene.fog = new THREE.Fog(0x071525, 10, 32);
+    scene.fog = new THREE.Fog(theme.fog, 10, 32);
 
     const camera = new THREE.PerspectiveCamera(30, width / height, 0.1, 100);
     camera.position.set(8, 10.6, 16.4);
@@ -1814,7 +2037,7 @@ export default function ThreeBattlefield({
     keyLight.shadow.bias = -0.0008;
     scene.add(keyLight);
 
-    const fillLight = new THREE.PointLight(0x2dd4bf, 15, 26, 2);
+    const fillLight = new THREE.PointLight(theme.glow, 15, 26, 2);
     fillLight.position.set(12, 5, 2);
     scene.add(fillLight);
 
@@ -1835,13 +2058,13 @@ export default function ThreeBattlefield({
     scene.add(mapGroup, towerGroup, enemyGroup, projectileGroup, overlayGroup, burstGroup);
     const rows = getEngine()?.getMapData()?.grid.length ?? 10;
     const cols = getEngine()?.getMapData()?.grid[0]?.length ?? 16;
-    const groundTexture = createGroundTexture();
+    const groundTexture = createGroundTexture(theme);
     groundTexture.repeat.set(2.2, 1.6);
-    const boardTexture = createBoardTexture();
+    const boardTexture = createBoardTexture(theme);
     boardTexture.repeat.set(1.1, 1);
-    const pathTileTexture = createPathTileTexture();
-    const buildTileTexture = createBuildTileTexture();
-    const backdropTexture = createBackdropTexture();
+    const pathTileTexture = createPathTileTexture(theme);
+    const buildTileTexture = createBuildTileTexture(theme);
+    const backdropTexture = createBackdropTexture(theme);
 
     const composer = new EffectComposer(renderer);
     composer.addPass(new RenderPass(scene, camera));
@@ -1879,7 +2102,7 @@ export default function ThreeBattlefield({
 
     const sideGlow = new THREE.Mesh(
       new THREE.PlaneGeometry(4, 14),
-      new THREE.MeshBasicMaterial({ color: 0x0f766e, transparent: true, opacity: 0.2, side: THREE.DoubleSide })
+      new THREE.MeshBasicMaterial({ color: theme.glow, transparent: true, opacity: 0.2, side: THREE.DoubleSide })
     );
     sideGlow.position.set(-1.5, 2.2, 4.5);
     sideGlow.rotation.y = Math.PI / 2.8;
@@ -1955,7 +2178,7 @@ export default function ThreeBattlefield({
     for (let i = 0; i < 12; i++) {
       const crystal = new THREE.Mesh(
         new THREE.OctahedronGeometry(0.16 + (i % 3) * 0.03, 0),
-        new THREE.MeshStandardMaterial({ color: 0x67e8f9, emissive: 0x22d3ee, emissiveIntensity: 0.45, roughness: 0.18, metalness: 0.22 })
+        new THREE.MeshStandardMaterial({ color: theme.glow, emissive: theme.glow, emissiveIntensity: 0.45, roughness: 0.18, metalness: 0.22 })
       );
       const side = i % 2 === 0 ? -1.35 : 16.35;
       const z = 0.4 + (i % 6) * 1.75;
@@ -1965,7 +2188,7 @@ export default function ThreeBattlefield({
       scene.add(crystal);
     }
 
-    const edgeGlowMat = new THREE.MeshBasicMaterial({ color: 0x22d3ee, transparent: true, opacity: 0.16, side: THREE.DoubleSide });
+    const edgeGlowMat = new THREE.MeshBasicMaterial({ color: theme.glow, transparent: true, opacity: 0.16, side: THREE.DoubleSide });
     const edgeGlows: THREE.Mesh[] = [];
     for (const z of [-0.98, 9.98]) {
       const strip = new THREE.Mesh(new THREE.PlaneGeometry(17.4, 0.18), edgeGlowMat.clone());
@@ -1986,7 +2209,7 @@ export default function ThreeBattlefield({
     for (let i = 0; i < 5; i++) {
       const fogCard = new THREE.Mesh(
         new THREE.PlaneGeometry(6.5 + i * 0.8, 2.6 + i * 0.35),
-        new THREE.MeshBasicMaterial({ color: 0x67e8f9, transparent: true, opacity: 0.05 + i * 0.012, depthWrite: false })
+        new THREE.MeshBasicMaterial({ color: theme.glow, transparent: true, opacity: 0.05 + i * 0.012, depthWrite: false })
       );
       fogCard.position.set(2 + i * 3.1, 1.2 + i * 0.2, 8.8 - i * 1.4);
       fogCard.rotation.x = -Math.PI / 2.8;
@@ -2006,7 +2229,7 @@ export default function ThreeBattlefield({
     const particleGeometry = new THREE.BufferGeometry();
     particleGeometry.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
     const particleMaterial = new THREE.PointsMaterial({
-      color: 0xa5f3fc,
+      color: theme.glow,
       size: 0.06,
       transparent: true,
       opacity: 0.42,
@@ -2015,6 +2238,55 @@ export default function ThreeBattlefield({
     });
     const ambientParticles = new THREE.Points(particleGeometry, particleMaterial);
     scene.add(ambientParticles);
+
+    const weatherParticleCount = environment === 'snow' ? 180 : environment === 'desert' ? 140 : environment === 'volcano' ? 120 : environment === 'void' ? 110 : 90;
+    const weatherPositions = new Float32Array(weatherParticleCount * 3);
+    const weatherDrift = new Float32Array(weatherParticleCount);
+    for (let i = 0; i < weatherParticleCount; i++) {
+      weatherPositions[i * 3] = -1 + Math.random() * 17;
+      weatherPositions[i * 3 + 1] = environment === 'snow' ? 0.8 + Math.random() * 4.8 : 0.3 + Math.random() * 3.6;
+      weatherPositions[i * 3 + 2] = -1 + Math.random() * 12;
+      weatherDrift[i] = 0.2 + Math.random() * 0.9;
+    }
+    const weatherGeometry = new THREE.BufferGeometry();
+    weatherGeometry.setAttribute('position', new THREE.BufferAttribute(weatherPositions, 3));
+    const weatherColor =
+      environment === 'snow' ? 0xe0f2fe :
+      environment === 'desert' ? 0xfcd34d :
+      environment === 'volcano' ? 0xfb7185 :
+      environment === 'ocean' ? 0x7dd3fc :
+      environment === 'void' ? 0xc084fc :
+      environment === 'swamp' ? 0x86efac :
+      theme.glow;
+    const weatherMaterial = new THREE.PointsMaterial({
+      color: weatherColor,
+      size: environment === 'snow' ? 0.1 : environment === 'desert' ? 0.08 : 0.07,
+      transparent: true,
+      opacity: environment === 'desert' ? 0.28 : 0.42,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    const weatherParticles = new THREE.Points(weatherGeometry, weatherMaterial);
+    scene.add(weatherParticles);
+    const environmentProps: THREE.Group[] = [];
+    const propCount = 14;
+    for (let i = 0; i < propCount; i++) {
+      const prop = createEnvironmentProp(environment, theme.glow, i);
+      const side = i % 2 === 0 ? -1.4 - (i % 3) * 0.08 : 16.4 + (i % 3) * 0.08;
+      const z = 0.4 + (i % 7) * 1.5;
+      prop.position.set(side, 0, z);
+      prop.rotation.y = side < 0 ? Math.PI / 2.4 : -Math.PI / 2.4;
+      scene.add(prop);
+      environmentProps.push(prop);
+    }
+    for (let i = 0; i < 6; i++) {
+      const prop = createEnvironmentProp(environment, theme.glow, i + propCount);
+      prop.position.set(1.2 + i * 2.8, 0, -1.42 - (i % 2) * 0.08);
+      prop.rotation.y = Math.PI + (i % 2 === 0 ? 0.18 : -0.18);
+      prop.scale.multiplyScalar(0.92 + (i % 3) * 0.08);
+      scene.add(prop);
+      environmentProps.push(prop);
+    }
 
     const towerMeshes = new Map<string, THREE.Group>();
     const enemyMeshes = new Map<string, THREE.Group>();
@@ -2816,6 +3088,48 @@ export default function ThreeBattlefield({
         }
         particleAttr.needsUpdate = true;
         particleMaterial.opacity = 0.3 + bossDangerLevel * 0.12;
+        const weatherAttr = weatherParticles.geometry.getAttribute('position') as THREE.BufferAttribute;
+        for (let i = 0; i < weatherParticleCount; i++) {
+          const baseIndex = i * 3;
+          if (environment === 'snow') {
+            weatherAttr.array[baseIndex] += Math.sin(frame * 0.01 + i) * 0.002 * weatherDrift[i];
+            weatherAttr.array[baseIndex + 1] -= 0.012 * weatherDrift[i];
+            weatherAttr.array[baseIndex + 2] += Math.cos(frame * 0.008 + i) * 0.0015;
+            if (weatherAttr.array[baseIndex + 1] < 0.15) weatherAttr.array[baseIndex + 1] = 5.4;
+          } else if (environment === 'desert') {
+            weatherAttr.array[baseIndex] += 0.02 * weatherDrift[i];
+            weatherAttr.array[baseIndex + 1] += Math.sin(frame * 0.015 + i) * 0.003;
+            if (weatherAttr.array[baseIndex] > 16.8) weatherAttr.array[baseIndex] = -0.8;
+          } else if (environment === 'volcano') {
+            weatherAttr.array[baseIndex + 1] += 0.012 * weatherDrift[i];
+            weatherAttr.array[baseIndex] += Math.sin(frame * 0.02 + i) * 0.003;
+            if (weatherAttr.array[baseIndex + 1] > 4.8) weatherAttr.array[baseIndex + 1] = 0.2;
+          } else if (environment === 'ocean') {
+            weatherAttr.array[baseIndex + 1] += 0.008 * weatherDrift[i];
+            weatherAttr.array[baseIndex + 2] += Math.sin(frame * 0.012 + i) * 0.002;
+            if (weatherAttr.array[baseIndex + 1] > 4.2) weatherAttr.array[baseIndex + 1] = 0.1;
+          } else if (environment === 'void') {
+            weatherAttr.array[baseIndex] += Math.cos(frame * 0.01 + i) * 0.004;
+            weatherAttr.array[baseIndex + 1] += Math.sin(frame * 0.013 + i * 0.7) * 0.004;
+            weatherAttr.array[baseIndex + 2] += Math.cos(frame * 0.009 + i) * 0.003;
+          } else {
+            weatherAttr.array[baseIndex + 1] += Math.sin(frame * 0.011 + i) * 0.002;
+          }
+        }
+        weatherAttr.needsUpdate = true;
+        weatherMaterial.opacity = environment === 'desert' ? 0.24 + bossDangerLevel * 0.04 : 0.34 + bossDangerLevel * 0.08;
+        for (let i = 0; i < environmentProps.length; i++) {
+          const prop = environmentProps[i];
+          prop.position.y = Math.sin(frame * 0.025 + (prop.userData.floatSeed as number)) * 0.025;
+          prop.rotation.y += 0.0012 * (i % 2 === 0 ? 1 : -1);
+          for (const child of prop.children) {
+            if (child.userData.propRing) child.rotation.z += 0.015;
+            if (child.userData.propFlame) {
+              child.scale.y = 0.92 + (Math.sin(frame * 0.09 + i) + 1) * 0.12;
+              child.rotation.y += 0.03;
+            }
+          }
+        }
         for (const pad of buildPads) {
           const pulse = 0.16 + (Math.sin(frame * 0.05 + pad.position.x * 0.9) + 1) * 0.05;
           (pad.material as THREE.MeshBasicMaterial).opacity = pulse;
@@ -2851,6 +3165,8 @@ export default function ThreeBattlefield({
       composer.dispose();
       particleGeometry.dispose();
       particleMaterial.dispose();
+      weatherGeometry.dispose();
+      weatherMaterial.dispose();
       for (const glow of edgeGlows) {
         const mat = glow.material;
         if (mat instanceof THREE.Material) mat.dispose();
@@ -2858,6 +3174,19 @@ export default function ThreeBattlefield({
       for (const fogCard of fogCards) {
         const mat = fogCard.material;
         if (mat instanceof THREE.Material) mat.dispose();
+      }
+      for (const prop of environmentProps) {
+        prop.traverse((child) => {
+          const mesh = child as THREE.Mesh;
+          if (!('geometry' in mesh)) return;
+          if (mesh.geometry) mesh.geometry.dispose();
+          const material = mesh.material;
+          if (Array.isArray(material)) {
+            for (const entry of material) entry.dispose();
+          } else if (material instanceof THREE.Material) {
+            material.dispose();
+          }
+        });
       }
       groundTexture.dispose();
       boardTexture.dispose();
@@ -2868,7 +3197,7 @@ export default function ThreeBattlefield({
       renderer.forceContextLoss();
       host.innerHTML = '';
     };
-  }, [cellSize, getEngine, height, width]);
+  }, [cellSize, environment, getEngine, height, width]);
 
   return <div ref={hostRef} className="absolute inset-0 rounded overflow-hidden" />;
 }

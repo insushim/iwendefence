@@ -185,6 +185,7 @@ function PlayPageContent() {
   const worldId = (parseInt(searchParams.get('world') || '1', 10) || 1) as WorldId;
   const stageId = (parseInt(searchParams.get('stage') || '1', 10) || 1) as StageId;
   const heroParam = searchParams.get('hero') || DEFAULT_HERO_ID;
+  const stage = getStage(worldId, stageId);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -300,7 +301,6 @@ function PlayPageContent() {
     setSelectedPlacedTowerId(null);
     setHeroCooldowns({ active: 0, ultimate: 0 });
 
-    const stage = getStage(worldId, stageId);
     setTotalWaves(stage.waves.length);
 
     const updateCanvasSize = () => {
@@ -964,7 +964,6 @@ function PlayPageContent() {
     stageLoadedRef.current = false;
 
     setTimeout(() => {
-      const stage = getStage(worldId, stageId);
       setTotalWaves(stage.waves.length);
 
       const container = containerRef.current;
@@ -992,7 +991,7 @@ function PlayPageContent() {
         gameLoop.startNextWave();
       }, 3000);
     }, 100);
-  }, [gameLoop, reset, stageId, worldId]);
+  }, [gameLoop, reset, stage.mapData, stage.waves]);
 
   return (
     <div className="h-dvh flex flex-col bg-[#0F172A] relative overflow-hidden game-area">
@@ -1072,6 +1071,7 @@ function PlayPageContent() {
                       height={canvasSize.height}
                       cellSize={cellSize}
                       getEngine={gameLoop.getEngine}
+                      environment={stage.environment}
                       selectedTowerId={selectedPlacedTowerId}
                       placementInfo={placementPreview}
                       onTileHover={handleBattlefieldHover}

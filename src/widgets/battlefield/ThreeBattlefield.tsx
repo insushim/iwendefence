@@ -961,6 +961,17 @@ function createHumanoidEnemy(color: number, elite: boolean): THREE.Group {
   const shoulders = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.08, 0.22), standardMaterial(0x1f2937));
   shoulders.position.y = 0.55;
   group.add(shoulders);
+
+  const eyeLeft = new THREE.Mesh(new THREE.SphereGeometry(0.025, 8, 8), standardMaterial(0xf8fafc, elite ? 0xfacc15 : 0xffffff, 0.6));
+  eyeLeft.position.set(-0.05, 0.76, 0.12);
+  group.add(eyeLeft);
+  const eyeRight = eyeLeft.clone();
+  eyeRight.position.x = 0.05;
+  group.add(eyeRight);
+
+  const legs = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.18, 0.18), standardMaterial(0x0f172a));
+  legs.position.y = 0.11;
+  group.add(legs);
   return group;
 }
 
@@ -974,6 +985,14 @@ function createArmoredEnemy(color: number, elite: boolean): THREE.Group {
   shield.rotation.z = Math.PI / 2;
   shield.position.set(0.24, 0.46, 0);
   group.add(shield);
+
+  const helm = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.12, 0.22), standardMaterial(0xcbd5e1));
+  helm.position.set(0, 0.84, 0);
+  group.add(helm);
+
+  const plume = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.2, 6), standardMaterial(color, elite ? 0xfacc15 : color, 0.3));
+  plume.position.set(0, 0.98, 0);
+  group.add(plume);
   return group;
 }
 
@@ -995,6 +1014,19 @@ function createBeastEnemy(color: number, elite: boolean): THREE.Group {
   tail.rotation.z = Math.PI / 2;
   tail.position.set(-0.34, 0.34, 0);
   group.add(tail);
+
+  const mane = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.11, 0.24, 8), standardMaterial(0xfde68a, color, 0.25));
+  mane.rotation.z = Math.PI / 2;
+  mane.position.set(0.14, 0.5, 0);
+  group.add(mane);
+
+  for (const x of [-0.18, 0.12]) {
+    for (const z of [-0.08, 0.08]) {
+      const paw = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.05, 0.18, 6), standardMaterial(0x422006));
+      paw.position.set(x, 0.08, z);
+      group.add(paw);
+    }
+  }
   return group;
 }
 
@@ -1016,6 +1048,15 @@ function createSlimeEnemy(color: number, elite: boolean): THREE.Group {
   const eyes2 = eyes.clone();
   eyes2.position.x = 0.07;
   group.add(eyes2);
+
+  const mouth = new THREE.Mesh(new THREE.TorusGeometry(0.06, 0.012, 6, 16, Math.PI), standardMaterial(0x111827));
+  mouth.position.set(0, 0.2, 0.17);
+  mouth.rotation.z = Math.PI;
+  group.add(mouth);
+
+  const gleam = new THREE.Mesh(new THREE.SphereGeometry(0.04, 10, 10), standardMaterial(0xffffff, color, 0.8));
+  gleam.position.set(-0.09, 0.38, 0.12);
+  group.add(gleam);
   return group;
 }
 
@@ -1030,11 +1071,23 @@ function createFlyingEnemy(color: number, elite: boolean): THREE.Group {
   const leftWing = new THREE.Mesh(wingGeo, standardMaterial(0x1f2937));
   leftWing.position.set(-0.24, 0.48, 0);
   leftWing.rotation.z = 0.35;
+  leftWing.userData.wing = 'left';
   group.add(leftWing);
   const rightWing = leftWing.clone();
   rightWing.position.x = 0.24;
   rightWing.rotation.z = -0.35;
+  rightWing.userData.wing = 'right';
   group.add(rightWing);
+
+  const beak = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.18, 4), standardMaterial(0xfef08a));
+  beak.rotation.z = -Math.PI / 2;
+  beak.position.set(0.18, 0.44, 0);
+  group.add(beak);
+
+  const tail = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.2, 4), standardMaterial(color, elite ? 0xfacc15 : color, 0.2));
+  tail.rotation.z = Math.PI / 2;
+  tail.position.set(-0.18, 0.45, 0);
+  group.add(tail);
   return group;
 }
 
@@ -1048,6 +1101,10 @@ function createCasterEnemy(color: number, elite: boolean): THREE.Group {
   const orb = new THREE.Mesh(new THREE.SphereGeometry(0.07, 12, 12), standardMaterial(0xffffff, color, 0.9));
   orb.position.set(0.24, 0.84, 0);
   group.add(orb);
+
+  const robe = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.42, 6), standardMaterial(0x312e81, color, 0.22));
+  robe.position.set(0, 0.18, 0);
+  group.add(robe);
   return group;
 }
 
@@ -1137,8 +1194,8 @@ function updateEnemyMesh(group: THREE.Group, enemy: Enemy, time: number): void {
   group.position.y = Math.sin(time * (enemy.isRaging ? 8 : 4)) * bob;
   group.rotation.y += enemy.isRaging ? 0.07 : 0.03;
   if (FLYING_TYPES.has(enemy.type) || enemy.type === 'DRAGON') {
-    const leftWing = group.children[1] as THREE.Mesh | undefined;
-    const rightWing = group.children[2] as THREE.Mesh | undefined;
+    const leftWing = group.children.find((child) => child.userData.wing === 'left') as THREE.Mesh | undefined;
+    const rightWing = group.children.find((child) => child.userData.wing === 'right') as THREE.Mesh | undefined;
     if (leftWing && rightWing) {
       leftWing.rotation.z = 0.2 + Math.sin(time * 16) * 0.35;
       rightWing.rotation.z = -0.2 - Math.sin(time * 16) * 0.35;
@@ -1150,9 +1207,9 @@ function createMapTile(cell: number): THREE.Mesh {
   const isPath = cell === 1;
   const isBuild = cell !== 1;
   const material = new THREE.MeshStandardMaterial({
-    color: isPath ? 0x64748b : isBuild ? 0x163f37 : 0x0f2d23,
-    roughness: isPath ? 0.62 : 0.92,
-    metalness: isPath ? 0.12 : 0.02,
+    color: isPath ? 0x7c8ea3 : isBuild ? 0x25463e : 0x17332d,
+    roughness: isPath ? 0.78 : 0.94,
+    metalness: isPath ? 0.08 : 0.02,
   });
   const tile = new THREE.Mesh(
     new THREE.BoxGeometry(0.94, isPath ? 0.12 : 0.08, 0.94),
@@ -1641,28 +1698,66 @@ export default function ThreeBattlefield({
           mapGroup.add(tile);
 
           if (cell === 1) {
-            const stripe = new THREE.Mesh(
-              new THREE.PlaneGeometry(0.78, 0.78),
-              basicGlow(0xe2e8f0, 0.14)
+            const paverInset = new THREE.Mesh(
+              new THREE.BoxGeometry(0.74, 0.03, 0.74),
+              new THREE.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.84, metalness: 0.06 })
             );
-            stripe.rotation.x = -Math.PI / 2;
-            stripe.position.set(col + 0.5, terrainHeight + 0.075, rows - row - 0.5);
-            mapGroup.add(stripe);
+            paverInset.position.set(col + 0.5, terrainHeight + 0.08, rows - row - 0.5);
+            mapGroup.add(paverInset);
+
+            if ((row + col) % 3 === 0) {
+              const seam = new THREE.Mesh(
+                new THREE.BoxGeometry(0.58, 0.012, 0.06),
+                new THREE.MeshStandardMaterial({ color: 0xcbd5e1, roughness: 0.8, metalness: 0.04 })
+              );
+              seam.position.set(col + 0.5, terrainHeight + 0.102, rows - row - 0.5);
+              seam.rotation.y = (row + col) % 2 === 0 ? 0 : Math.PI / 2;
+              mapGroup.add(seam);
+            }
           }
 
           if (cell !== 1) {
-            const padBase = new THREE.Mesh(
-              new THREE.CylinderGeometry(0.33, 0.36, 0.04, 20),
-              new THREE.MeshStandardMaterial({ color: 0x065f46, roughness: 0.78, metalness: 0.06 })
+            const buildPlate = new THREE.Mesh(
+              new THREE.BoxGeometry(0.72, 0.028, 0.72),
+              new THREE.MeshStandardMaterial({ color: 0x355f53, roughness: 0.9, metalness: 0.03 })
             );
-            padBase.position.set(col + 0.5, terrainHeight + 0.04, rows - row - 0.5);
-            mapGroup.add(padBase);
+            buildPlate.position.set(col + 0.5, terrainHeight + 0.045, rows - row - 0.5);
+            buildPlate.rotation.y = ((row + col) % 2) * (Math.PI / 4);
+            mapGroup.add(buildPlate);
 
-            const padRing = new THREE.Mesh(new THREE.RingGeometry(0.24, 0.33, 30), basicGlow(0x34d399, 0.22));
-            padRing.rotation.x = -Math.PI / 2;
-            padRing.position.set(col + 0.5, terrainHeight + 0.065, rows - row - 0.5);
-            mapGroup.add(padRing);
-            buildPads.push(padRing);
+            const buildAccent = new THREE.Mesh(
+              new THREE.PlaneGeometry(0.52, 0.52),
+              basicGlow(0x7dd3c7, 0.12)
+            );
+            buildAccent.rotation.x = -Math.PI / 2;
+            buildAccent.rotation.z = Math.PI / 4;
+            buildAccent.position.set(col + 0.5, terrainHeight + 0.068, rows - row - 0.5);
+            mapGroup.add(buildAccent);
+            buildPads.push(buildAccent);
+
+            if ((row + col) % 2 === 0) {
+              const tuft = new THREE.Mesh(
+                new THREE.ConeGeometry(0.06, 0.18, 5),
+                new THREE.MeshStandardMaterial({ color: 0x0f766e, roughness: 0.96, metalness: 0.01 })
+              );
+              tuft.position.set(col + 0.2, terrainHeight + 0.12, rows - row - 0.18);
+              mapGroup.add(tuft);
+              const tuft2 = tuft.clone();
+              tuft2.position.set(col + 0.78, terrainHeight + 0.1, rows - row - 0.72);
+              tuft2.scale.set(0.8, 0.85, 0.8);
+              mapGroup.add(tuft2);
+            } else {
+              const stone = new THREE.Mesh(
+                new THREE.DodecahedronGeometry(0.05, 0),
+                new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.92, metalness: 0.02 })
+              );
+              stone.position.set(col + 0.25, terrainHeight + 0.08, rows - row - 0.24);
+              mapGroup.add(stone);
+              const stone2 = stone.clone();
+              stone2.position.set(col + 0.75, terrainHeight + 0.075, rows - row - 0.66);
+              stone2.scale.setScalar(0.72);
+              mapGroup.add(stone2);
+            }
           }
         }
       }

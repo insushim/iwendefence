@@ -1129,7 +1129,7 @@ function PlayPageContent() {
             ) : null}
           </div>
 
-          <div ref={containerRef} className="relative flex items-center justify-center">
+          <div ref={containerRef} className="relative flex-1 h-full min-w-0 flex items-center justify-center">
             <div
               className="relative"
               style={{

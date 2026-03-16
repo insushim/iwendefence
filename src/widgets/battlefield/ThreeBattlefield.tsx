@@ -598,6 +598,26 @@ function addTowerShadow(group: THREE.Group): void {
   group.add(shadow);
 }
 
+function addPedestalDetails(group: THREE.Group, color: number): void {
+  const innerRing = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.24, 0.28, 0.06, 10),
+    standardMaterial(0x0f172a, color, 0.12)
+  );
+  innerRing.position.y = 0.18;
+  group.add(innerRing);
+
+  for (let i = 0; i < 4; i++) {
+    const accent = new THREE.Mesh(
+      new THREE.BoxGeometry(0.1, 0.05, 0.18),
+      standardMaterial(0xe2e8f0, color, 0.2)
+    );
+    const angle = (Math.PI / 2) * i;
+    accent.position.set(Math.cos(angle) * 0.2, 0.19, Math.sin(angle) * 0.2);
+    accent.rotation.y = angle;
+    group.add(accent);
+  }
+}
+
 function createPedestal(color: number): THREE.Group {
   const group = new THREE.Group();
   const base = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.44, 0.16, 12), standardMaterial(0x111827));
@@ -611,6 +631,7 @@ function createPedestal(color: number): THREE.Group {
   trim.rotation.x = Math.PI / 2;
   trim.position.y = 0.17;
   group.add(trim);
+  addPedestalDetails(group, color);
   return group;
 }
 
@@ -647,6 +668,19 @@ function createArcherTower(color: number): THREE.Group {
   banner.position.set(-0.18, 1.06, 0.2);
   group.add(banner);
 
+  const window = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.2, 0.02), standardMaterial(0xf8fafc, color, 0.35));
+  window.position.set(0, 0.74, 0.21);
+  group.add(window);
+
+  const arrowRack = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.3, 0.08), wood);
+  arrowRack.position.set(-0.2, 0.7, -0.16);
+  group.add(arrowRack);
+  for (const z of [-0.04, 0.04]) {
+    const arrow = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.26, 6), standardMaterial(0xf8fafc));
+    arrow.position.set(-0.2, 0.86, z - 0.16);
+    group.add(arrow);
+  }
+
   addTowerShadow(group);
   return group;
 }
@@ -671,6 +705,18 @@ function createMagicTower(color: number): THREE.Group {
   orbit.rotation.x = Math.PI / 2;
   orbit.position.y = 1.05;
   group.add(orbit);
+
+  for (let i = 0; i < 3; i++) {
+    const shard = new THREE.Mesh(new THREE.OctahedronGeometry(0.12, 0), crystalMat);
+    const angle = (Math.PI * 2 * i) / 3;
+    shard.position.set(Math.cos(angle) * 0.28, 0.58, Math.sin(angle) * 0.28);
+    shard.scale.set(0.6, 1.05, 0.6);
+    group.add(shard);
+  }
+
+  const runeBase = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.3, 0.06, 12), standardMaterial(0x1e293b, color, 0.12));
+  runeBase.position.y = 0.2;
+  group.add(runeBase);
   return group;
 }
 
@@ -695,6 +741,14 @@ function createElementalPylon(color: number, topper: 'crystal' | 'coil' | 'orb')
     const orb = new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 16), standardMaterial(0xffffff, color, 0.8));
     orb.position.y = 0.96;
     group.add(orb);
+  }
+
+  for (let i = 0; i < 3; i++) {
+    const fin = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.36, 0.14), standardMaterial(0xcbd5e1, color, 0.18));
+    const angle = (Math.PI * 2 * i) / 3;
+    fin.position.set(Math.cos(angle) * 0.16, 0.68, Math.sin(angle) * 0.16);
+    fin.rotation.y = angle;
+    group.add(fin);
   }
   addTowerShadow(group);
   return group;
@@ -724,6 +778,13 @@ function createHealerTower(color: number): THREE.Group {
   petals.position.y = 0.7;
   group.add(petals);
 
+  for (const x of [-0.14, 0.14]) {
+    const wing = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.34, 0.16), standardMaterial(0xfef2f2, color, 0.22));
+    wing.position.set(x, 0.8, 0);
+    wing.rotation.z = x < 0 ? 0.35 : -0.35;
+    group.add(wing);
+  }
+
   addTowerShadow(group);
   return group;
 }
@@ -741,6 +802,16 @@ function createFlameTower(color: number): THREE.Group {
   const flameCore = new THREE.Mesh(new THREE.SphereGeometry(0.12, 12, 12), standardMaterial(0xffffff, 0xffedd5, 1));
   flameCore.position.y = 0.66;
   group.add(flameCore);
+
+  const cage = new THREE.Mesh(new THREE.TorusGeometry(0.24, 0.018, 8, 18), standardMaterial(0x7c2d12, color, 0.12));
+  cage.rotation.x = Math.PI / 2;
+  cage.position.y = 0.54;
+  group.add(cage);
+  for (const x of [-0.14, 0.14]) {
+    const brace = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.34, 0.04), standardMaterial(0x7c2d12));
+    brace.position.set(x, 0.48, 0);
+    group.add(brace);
+  }
 
   addTowerShadow(group);
   return group;
@@ -766,6 +837,14 @@ function createWordTower(color: number): THREE.Group {
   glyph.position.set(0.26, 0.72, 0);
   group.add(glyph);
 
+  const frame = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.62, 0.04), standardMaterial(0x0f172a));
+  frame.position.set(0, 0.56, -0.05);
+  group.add(frame);
+
+  const bookmark = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.22, 0.02), standardMaterial(color, color, 0.35));
+  bookmark.position.set(-0.14, 0.42, 0.08);
+  group.add(bookmark);
+
   addTowerShadow(group);
   return group;
 }
@@ -784,6 +863,15 @@ function createMineTower(color: number): THREE.Group {
   const rails = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.04, 0.56), standardMaterial(0x334155));
   rails.position.y = 0.19;
   group.add(rails);
+
+  const lantern = new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 10), standardMaterial(0xfef08a, color, 0.8));
+  lantern.position.set(0.14, 0.54, 0.16);
+  group.add(lantern);
+
+  const pickaxe = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.04, 0.04), standardMaterial(0xe2e8f0));
+  pickaxe.position.set(-0.12, 0.48, -0.14);
+  pickaxe.rotation.z = 0.8;
+  group.add(pickaxe);
   addTowerShadow(group);
   return group;
 }
@@ -822,6 +910,17 @@ function createCannonTower(color: number): THREE.Group {
   const sidePlate = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.22, 0.48), accent);
   sidePlate.position.set(0.05, 0.34, 0);
   group.add(sidePlate);
+
+  const rivetMat = standardMaterial(0xe2e8f0, color, 0.1);
+  for (const z of [-0.16, 0.16]) {
+    const rivet = new THREE.Mesh(new THREE.SphereGeometry(0.03, 8, 8), rivetMat);
+    rivet.position.set(0.24, 0.52, z);
+    group.add(rivet);
+  }
+
+  const support = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.24, 0.32), darkMetal);
+  support.position.set(0.14, 0.32, 0);
+  group.add(support);
   addTowerShadow(group);
   return group;
 }
@@ -858,6 +957,15 @@ function createSniperTower(color: number): THREE.Group {
   const cheekPad = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.06, 0.08), standardMaterial(0x1f2937));
   cheekPad.position.set(0.02, 0.9, 0);
   group.add(cheekPad);
+
+  const muzzle = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.03, 0.16, 10), metal);
+  muzzle.rotation.z = Math.PI / 2;
+  muzzle.position.set(0.88, 0.88, 0);
+  group.add(muzzle);
+
+  const stock = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.08, 0.1), standardMaterial(0x7c4a19));
+  stock.position.set(-0.08, 0.84, 0);
+  group.add(stock);
   addTowerShadow(group);
   return group;
 }
@@ -872,6 +980,11 @@ function createSupportTower(color: number): THREE.Group {
   const top = new THREE.Mesh(new THREE.IcosahedronGeometry(0.22, 0), standardMaterial(0xffffff, color, 0.65));
   top.position.y = 1.02;
   group.add(top);
+
+  const orbit = new THREE.Mesh(new THREE.TorusGeometry(0.18, 0.02, 8, 18), standardMaterial(0xffffff, color, 0.45));
+  orbit.rotation.x = Math.PI / 2;
+  orbit.position.y = 0.8;
+  group.add(orbit);
   addTowerShadow(group);
   return group;
 }
@@ -896,6 +1009,16 @@ function createWallTower(color: number): THREE.Group {
     spikes.add(spike);
   }
   group.add(spikes);
+
+  for (const x of [-0.24, 0.24]) {
+    const buttress = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.24, 0.22), stone);
+    buttress.position.set(x, 0.18, 0);
+    group.add(buttress);
+  }
+
+  const slit = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.16, 0.02), standardMaterial(0x111827));
+  slit.position.set(0, 0.28, 0.2);
+  group.add(slit);
   addTowerShadow(group);
   return group;
 }
@@ -1276,7 +1399,7 @@ function updateEnemyMesh(group: THREE.Group, enemy: Enemy, time: number): void {
   if (hpBarWrap && hpBarFill) {
     const hpRatio = enemy.maxHp > 0 ? Math.max(0, Math.min(1, enemy.displayHp / enemy.maxHp)) : 0;
     hpBarWrap.rotation.y = -group.rotation.y;
-    hpBarWrap.visible = hpRatio < 0.999;
+    hpBarWrap.visible = true;
     hpBarFill.scale.x = Math.max(0.001, hpRatio);
     hpBarFill.position.x = -(1 - hpRatio) * 0.5 * (hpBarFill.geometry as THREE.PlaneGeometry).parameters.width;
     const fillMaterial = hpBarFill.material as THREE.MeshBasicMaterial;

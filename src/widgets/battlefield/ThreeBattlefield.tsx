@@ -2018,10 +2018,10 @@ export default function ThreeBattlefield({
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(width, height, false);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.25));
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.1;
+    renderer.toneMappingExposure = 1.32;
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     host.innerHTML = '';
@@ -2029,17 +2029,17 @@ export default function ThreeBattlefield({
 
     const theme = ENVIRONMENT_VISUALS[environment];
     const scene = new THREE.Scene();
-    scene.fog = new THREE.Fog(theme.fog, 10, 32);
+    scene.fog = new THREE.Fog(theme.fog, 14, 42);
 
     const camera = new THREE.PerspectiveCamera(40, width / height, 0.1, 100);
 
-    const ambientLight = new THREE.AmbientLight(0xa5f3fc, 0.92);
+    const ambientLight = new THREE.AmbientLight(0xdbeafe, 1.2);
     scene.add(ambientLight);
 
-    const hemiLight = new THREE.HemisphereLight(0xb9f7ff, 0x09131f, 0.9);
+    const hemiLight = new THREE.HemisphereLight(0xb9f7ff, 0x132033, 1.15);
     scene.add(hemiLight);
 
-    const keyLight = new THREE.DirectionalLight(0xffffff, 1.65);
+    const keyLight = new THREE.DirectionalLight(0xffffff, 1.95);
     keyLight.position.set(5, 12, 6);
     keyLight.castShadow = true;
     keyLight.shadow.mapSize.width = 1024;
@@ -2053,11 +2053,11 @@ export default function ThreeBattlefield({
     keyLight.shadow.bias = -0.0008;
     scene.add(keyLight);
 
-    const fillLight = new THREE.PointLight(theme.glow, 15, 26, 2);
+    const fillLight = new THREE.PointLight(theme.glow, 18, 28, 2);
     fillLight.position.set(12, 5, 2);
     scene.add(fillLight);
 
-    const rimLight = new THREE.PointLight(0x7c3aed, 17, 32, 2);
+    const rimLight = new THREE.PointLight(0x7c3aed, 14, 30, 2);
     rimLight.position.set(-4, 8, 8);
     scene.add(rimLight);
 
@@ -2076,14 +2076,14 @@ export default function ThreeBattlefield({
     const cols = getEngine()?.getMapData()?.grid[0]?.length ?? 16;
     const boardCenterX = cols / 2;
     const boardCenterZ = rows / 2;
-    const visibleWidth = cols + 2.2;
-    const visibleDepth = rows + 3.4;
+    const visibleWidth = cols + 1.4;
+    const visibleDepth = rows + 2.1;
     const fovRadians = THREE.MathUtils.degToRad(camera.fov);
     const fitHeightDistance = (visibleDepth * 0.5) / Math.tan(fovRadians / 2);
     const fitWidthDistance = (visibleWidth * 0.5) / (Math.tan(fovRadians / 2) * camera.aspect);
-    const fitDistance = Math.max(fitHeightDistance, fitWidthDistance) * 1.12;
-    camera.position.set(boardCenterX, fitDistance * 0.88, boardCenterZ + fitDistance * 1.02);
-    camera.lookAt(boardCenterX, 0.12, boardCenterZ + 0.2);
+    const fitDistance = Math.max(fitHeightDistance, fitWidthDistance) * 0.96;
+    camera.position.set(boardCenterX, fitDistance * 0.8, boardCenterZ + fitDistance * 0.94);
+    camera.lookAt(boardCenterX, 0.16, boardCenterZ + 0.45);
     camera.updateProjectionMatrix();
     const groundTexture = createGroundTexture(theme);
     groundTexture.repeat.set(2.2, 1.6);
@@ -2095,7 +2095,7 @@ export default function ThreeBattlefield({
 
     const composer = new EffectComposer(renderer);
     composer.addPass(new RenderPass(scene, camera));
-    const bloomPass = new UnrealBloomPass(new THREE.Vector2(width, height), 0.32, 0.75, 0.9);
+    const bloomPass = new UnrealBloomPass(new THREE.Vector2(width, height), 0.18, 0.58, 1.05);
     composer.addPass(bloomPass);
 
     const ground = new THREE.Mesh(
@@ -2123,14 +2123,14 @@ export default function ThreeBattlefield({
 
     const backWall = new THREE.Mesh(
       new THREE.PlaneGeometry(22, 8),
-      new THREE.MeshBasicMaterial({ map: backdropTexture, transparent: true, opacity: 0.92 })
+      new THREE.MeshBasicMaterial({ map: backdropTexture, transparent: true, opacity: 0.72 })
     );
     backWall.position.set(7.5, 4.2, -2.6);
     scene.add(backWall);
 
     const sideGlow = new THREE.Mesh(
       new THREE.PlaneGeometry(4, 14),
-      new THREE.MeshBasicMaterial({ color: theme.glow, transparent: true, opacity: 0.2, side: THREE.DoubleSide })
+      new THREE.MeshBasicMaterial({ color: theme.glow, transparent: true, opacity: 0.12, side: THREE.DoubleSide })
     );
     sideGlow.position.set(-1.5, 2.2, 4.5);
     sideGlow.rotation.y = Math.PI / 2.8;
@@ -2194,7 +2194,7 @@ export default function ThreeBattlefield({
       scene.add(lanternGlow);
     }
 
-    for (let i = 0; i < 12; i++) {
+    for (let i = 0; i < 8; i++) {
       const crystal = new THREE.Mesh(
         new THREE.OctahedronGeometry(0.16 + (i % 3) * 0.03, 0),
         new THREE.MeshStandardMaterial({ color: theme.glow, emissive: theme.glow, emissiveIntensity: 0.45, roughness: 0.18, metalness: 0.22 })
@@ -2225,10 +2225,10 @@ export default function ThreeBattlefield({
     }
 
     const fogCards: THREE.Mesh[] = [];
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 3; i++) {
       const fogCard = new THREE.Mesh(
         new THREE.PlaneGeometry(6.5 + i * 0.8, 2.6 + i * 0.35),
-        new THREE.MeshBasicMaterial({ color: theme.glow, transparent: true, opacity: 0.05 + i * 0.012, depthWrite: false })
+        new THREE.MeshBasicMaterial({ color: theme.glow, transparent: true, opacity: 0.025 + i * 0.008, depthWrite: false })
       );
       fogCard.position.set(2 + i * 3.1, 1.2 + i * 0.2, 8.8 - i * 1.4);
       fogCard.rotation.x = -Math.PI / 2.8;
@@ -2236,7 +2236,7 @@ export default function ThreeBattlefield({
       fogCards.push(fogCard);
     }
 
-    const particleCount = 180;
+    const particleCount = 96;
     const particlePositions = new Float32Array(particleCount * 3);
     const particleOffsets = new Float32Array(particleCount);
     for (let i = 0; i < particleCount; i++) {
@@ -2258,7 +2258,7 @@ export default function ThreeBattlefield({
     const ambientParticles = new THREE.Points(particleGeometry, particleMaterial);
     scene.add(ambientParticles);
 
-    const weatherParticleCount = environment === 'snow' ? 180 : environment === 'desert' ? 140 : environment === 'volcano' ? 120 : environment === 'void' ? 110 : 90;
+    const weatherParticleCount = environment === 'snow' ? 96 : environment === 'desert' ? 80 : environment === 'volcano' ? 72 : environment === 'void' ? 68 : 56;
     const weatherPositions = new Float32Array(weatherParticleCount * 3);
     const weatherDrift = new Float32Array(weatherParticleCount);
     for (let i = 0; i < weatherParticleCount; i++) {
@@ -2288,7 +2288,7 @@ export default function ThreeBattlefield({
     const weatherParticles = new THREE.Points(weatherGeometry, weatherMaterial);
     scene.add(weatherParticles);
     const environmentProps: THREE.Group[] = [];
-    const propCount = 14;
+    const propCount = 8;
     for (let i = 0; i < propCount; i++) {
       const prop = createEnvironmentProp(environment, theme.glow, i);
       const side = i % 2 === 0 ? -1.4 - (i % 3) * 0.08 : 16.4 + (i % 3) * 0.08;
@@ -2298,7 +2298,7 @@ export default function ThreeBattlefield({
       scene.add(prop);
       environmentProps.push(prop);
     }
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < 4; i++) {
       const prop = createEnvironmentProp(environment, theme.glow, i + propCount);
       prop.position.set(1.2 + i * 2.8, 0, -1.42 - (i % 2) * 0.08);
       prop.rotation.y = Math.PI + (i % 2 === 0 ? 0.18 : -0.18);

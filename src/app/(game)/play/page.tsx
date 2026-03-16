@@ -1049,44 +1049,125 @@ function PlayPageContent() {
       </div>
 
       {/* Game Canvas Area */}
-      <div ref={containerRef} className="flex-1 relative flex items-center justify-center bg-[#0d1520]">
-        {/* Canvas wrapper with glow border + vignette */}
-      <div
-        className="relative"
-        style={{
-          width: canvasSize.width || undefined,
-          height: canvasSize.height || undefined,
-        }}
-      >
-          {canvasSize.width > 0 && canvasSize.height > 0 && (
+      <div className="flex-1 relative bg-[#0d1520] overflow-hidden">
+        <div className="h-full w-full flex items-center justify-center gap-4 px-4">
+          <div className="hidden xl:block w-[320px] shrink-0">
+            {selectedPlacedTower ? (
+              <div
+                className="rounded-3xl border border-slate-700/50 bg-slate-950/75 px-3 py-2 shadow-2xl backdrop-blur-xl"
+                style={{ boxShadow: '0 12px 30px rgba(2,6,23,0.28)' }}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Tower Paths</div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg leading-none">{selectedPlacedTowerDef?.icon}</span>
+                      <div className="text-sm font-bold text-white">{selectedPlacedTowerDef?.nameKr ?? selectedPlacedTower.type}</div>
+                      <span
+                        className="text-[9px] font-black uppercase tracking-[0.2em] px-2 py-1 rounded-full"
+                        style={{
+                          color: selectedPlacedTowerDef?.color ?? '#94a3b8',
+                          background: `${selectedPlacedTowerDef?.color ?? '#94a3b8'}18`,
+                        }}
+                      >
+                        {selectedPlacedTowerDef ? getAttackTypeLabel(selectedPlacedTowerDef.attackType) : 'Tower'}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="text-[11px] text-amber-300 font-bold">{gold}G</div>
+                </div>
+                <div className="grid grid-cols-2 gap-2 mb-2">
+                  {[
+                    { label: 'DMG', value: Math.round(selectedPlacedTower.stats.damage) },
+                    { label: 'RNG', value: selectedPlacedTower.stats.range.toFixed(1) },
+                    { label: 'SPD', value: selectedPlacedTower.stats.attackSpeed.toFixed(2) },
+                    { label: 'CRIT', value: `${Math.round(selectedPlacedTower.stats.critChance * 100)}%` },
+                  ].map((stat) => (
+                    <div
+                      key={stat.label}
+                      className="rounded-2xl px-2 py-2"
+                      style={{
+                        background: 'linear-gradient(180deg, rgba(15,23,42,0.86), rgba(15,23,42,0.58))',
+                        border: '1px solid rgba(71,85,105,0.18)',
+                      }}
+                    >
+                      <div className="text-[9px] uppercase tracking-[0.2em] text-slate-500">{stat.label}</div>
+                      <div className="text-sm font-black text-white">{stat.value}</div>
+                    </div>
+                  ))}
+                </div>
+                <div className="grid gap-2">
+                  {getTowerPathInfos(selectedPlacedTower.type).map((pathInfo) => {
+                    const currentTier = selectedPlacedTower.upgradePaths?.[pathInfo.path] ?? 0;
+                    const pathUpgrades = getUpgradePath(selectedPlacedTower.type, pathInfo.path);
+                    const nextUpgrade = pathUpgrades[currentTier];
+                    const allowed = canUpgrade(selectedPlacedTower.type, selectedPlacedTower.upgradePaths ?? [0, 0, 0], pathInfo.path);
+                    const affordable = !!nextUpgrade && gold >= nextUpgrade.cost;
+
+                    return (
+                      <button
+                        key={`${selectedPlacedTower.id}-${pathInfo.path}-side`}
+                        onClick={() => handleTowerBranchUpgrade(pathInfo.path)}
+                        disabled={!nextUpgrade || !allowed || !affordable}
+                        className="rounded-2xl border px-3 py-2 text-left disabled:opacity-40"
+                        style={{
+                          borderColor: allowed ? 'rgba(148,163,184,0.24)' : 'rgba(71,85,105,0.2)',
+                          background: 'linear-gradient(180deg, rgba(15,23,42,0.75), rgba(15,23,42,0.45))',
+                        }}
+                      >
+                        <div className="flex items-center justify-between text-xs mb-1">
+                          <span className="text-slate-200 font-bold">{pathInfo.name}</span>
+                          <span className="text-indigo-300">{currentTier}/5</span>
+                        </div>
+                        <div className="text-[10px] text-slate-500 mb-2">{nextUpgrade ? nextUpgrade.name : 'MAXED'}</div>
+                        <div className="text-[10px] text-amber-300 font-bold">{nextUpgrade ? `${nextUpgrade.cost}G` : 'LOCK'}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
+          </div>
+
+          <div ref={containerRef} className="relative flex items-center justify-center">
             <div
-              className="absolute inset-0 rounded overflow-hidden"
-              style={{ width: canvasSize.width, height: canvasSize.height }}
+              className="relative"
+              style={{
+                width: canvasSize.width || undefined,
+                height: canvasSize.height || undefined,
+              }}
             >
-              <ThreeBattlefield
-                width={canvasSize.width}
-                height={canvasSize.height}
-                cellSize={cellSize}
-                getEngine={gameLoop.getEngine}
-                selectedTowerId={selectedPlacedTowerId}
-                placementInfo={placementPreview}
-                onTileHover={handleBattlefieldHover}
-                onTileLeave={handleBattlefieldLeave}
-                onTileSelect={handleBattlefieldSelect}
+              {canvasSize.width > 0 && canvasSize.height > 0 && (
+                <div
+                  className="absolute inset-0 rounded overflow-hidden"
+                  style={{ width: canvasSize.width, height: canvasSize.height }}
+                >
+                  <ThreeBattlefield
+                    width={canvasSize.width}
+                    height={canvasSize.height}
+                    cellSize={cellSize}
+                    getEngine={gameLoop.getEngine}
+                    selectedTowerId={selectedPlacedTowerId}
+                    placementInfo={placementPreview}
+                    onTileHover={handleBattlefieldHover}
+                    onTileLeave={handleBattlefieldLeave}
+                    onTileSelect={handleBattlefieldSelect}
+                  />
+                </div>
+              )}
+              <canvas
+                ref={canvasRef}
+                className="relative z-10 block touch-none rounded pointer-events-none"
+                onClick={handleCanvasTap}
+                onMouseMove={handleCanvasMouseMove}
+                onMouseLeave={handleCanvasMouseLeave}
+                onTouchMove={handleCanvasTouchMove}
+                style={{ imageRendering: 'pixelated', background: 'transparent' }}
               />
+              <div className="canvas-vignette rounded" />
+              <div className="canvas-glow-border" />
             </div>
-          )}
-          <canvas
-            ref={canvasRef}
-            className="relative z-10 block touch-none rounded pointer-events-none"
-            onClick={handleCanvasTap}
-            onMouseMove={handleCanvasMouseMove}
-            onMouseLeave={handleCanvasMouseLeave}
-            onTouchMove={handleCanvasTouchMove}
-            style={{ imageRendering: 'pixelated', background: 'transparent' }}
-          />
-          <div className="canvas-vignette rounded" />
-          <div className="canvas-glow-border" />
+          </div>
         </div>
 
         {/* Wave start button overlay */}
@@ -1215,7 +1296,7 @@ function PlayPageContent() {
           </div>
         </div>
 
-        <div className="px-3 py-2 border-b border-slate-800/40 min-h-[148px]">
+        <div className="px-3 py-2 border-b border-slate-800/40 min-h-[148px] xl:hidden">
           {selectedPlacedTower ? (
             <div
               className="rounded-3xl border border-slate-700/50 bg-slate-950/75 px-3 py-2 shadow-2xl backdrop-blur-xl"

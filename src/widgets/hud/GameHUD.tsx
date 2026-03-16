@@ -432,7 +432,7 @@ function ComboBadge({ combo }: { combo: number }) {
         {combo}
       </span>
       <span className="text-[9px] font-bold text-orange-300/80 tracking-wider">
-        COMBO
+        콤보
       </span>
       <span
         className="text-[9px] font-bold tabular-nums"
@@ -496,7 +496,7 @@ function KillBadge({ killCombo }: { killCombo: number }) {
       <span className={`text-[10px] font-extrabold ${isMega ? 'text-red-300' : 'text-red-300/90'}`}>
         {killCombo}
       </span>
-      <span className="text-[9px] font-bold text-red-400/60 tracking-wider">KILL</span>
+      <span className="text-[9px] font-bold text-red-400/60 tracking-wider">킬</span>
       {isMega && (
         <div
           className="absolute inset-0 rounded-full animate-shimmer pointer-events-none opacity-25"

@@ -127,8 +127,8 @@ function fitBattlefieldSize(containerWidth: number, containerHeight: number): {
 } {
   const cols = 16;
   const rows = 10;
-  const horizontalPadding = 32;
-  const verticalPadding = 28;
+  const horizontalPadding = 8;
+  const verticalPadding = 8;
   const usableWidth = Math.max(320, containerWidth - horizontalPadding);
   const usableHeight = Math.max(220, containerHeight - verticalPadding);
   const cellSize = Math.max(28, Math.floor(Math.min(usableWidth / cols, usableHeight / rows)));
@@ -143,38 +143,38 @@ function fitBattlefieldSize(containerWidth: number, containerHeight: number): {
 function getBossAccent(type: string): { label: string; color: string; glow: string } {
   const normalized = type.toUpperCase();
   if (normalized.includes('DRAGON')) {
-    return { label: 'DRAGON CLASS', color: '#fb7185', glow: 'rgba(251,113,133,0.35)' };
+    return { label: '드래곤 클래스', color: '#fb7185', glow: 'rgba(251,113,133,0.35)' };
   }
   if (normalized.includes('HYDRA')) {
-    return { label: 'HYDRA CLASS', color: '#4ade80', glow: 'rgba(74,222,128,0.35)' };
+    return { label: '히드라 클래스', color: '#4ade80', glow: 'rgba(74,222,128,0.35)' };
   }
   if (normalized.includes('LICH') || normalized.includes('WORD')) {
-    return { label: 'ARCANE CLASS', color: '#c084fc', glow: 'rgba(192,132,252,0.35)' };
+    return { label: '마법 클래스', color: '#c084fc', glow: 'rgba(192,132,252,0.35)' };
   }
   if (normalized.includes('DEMON')) {
-    return { label: 'HELL CLASS', color: '#f97316', glow: 'rgba(249,115,22,0.35)' };
+    return { label: '지옥 클래스', color: '#f97316', glow: 'rgba(249,115,22,0.35)' };
   }
-  return { label: 'BOSS ALERT', color: '#f87171', glow: 'rgba(248,113,113,0.35)' };
+  return { label: '보스 경고', color: '#f87171', glow: 'rgba(248,113,113,0.35)' };
 }
 
 function getAttackTypeLabel(type: string): string {
   switch (type) {
     case 'single':
-      return 'Single';
+      return '단일';
     case 'area':
-      return 'Blast';
+      return '광역';
     case 'chain':
-      return 'Chain';
+      return '연쇄';
     case 'dot':
-      return 'DoT';
+      return '지속';
     case 'heal':
-      return 'Support';
+      return '지원';
     case 'block':
-      return 'Block';
+      return '차단';
     case 'produce':
-      return 'Eco';
+      return '경제';
     case 'buff':
-      return 'Buff';
+      return '버프';
     default:
       return type;
   }
@@ -1042,7 +1042,7 @@ function PlayPageContent() {
                 borderColor: 'rgba(245,158,11,0.35)',
               }}
             >
-              <span className="text-[10px] font-black text-orange-300 text-glow-gold">{quizCombo} COMBO</span>
+              <span className="text-[10px] font-black text-orange-300 text-glow-gold">{quizCombo} 콤보</span>
             </div>
           )}
         </div>
@@ -1050,85 +1050,7 @@ function PlayPageContent() {
 
       {/* Game Canvas Area */}
       <div className="flex-1 relative bg-[#0d1520] overflow-hidden">
-        <div className="h-full w-full flex items-center justify-center gap-4 px-4">
-          <div className="hidden xl:block w-[320px] shrink-0">
-            {selectedPlacedTower ? (
-              <div
-                className="rounded-3xl border border-slate-700/50 bg-slate-950/75 px-3 py-2 shadow-2xl backdrop-blur-xl"
-                style={{ boxShadow: '0 12px 30px rgba(2,6,23,0.28)' }}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <div>
-                    <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Tower Paths</div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-lg leading-none">{selectedPlacedTowerDef?.icon}</span>
-                      <div className="text-sm font-bold text-white">{selectedPlacedTowerDef?.nameKr ?? selectedPlacedTower.type}</div>
-                      <span
-                        className="text-[9px] font-black uppercase tracking-[0.2em] px-2 py-1 rounded-full"
-                        style={{
-                          color: selectedPlacedTowerDef?.color ?? '#94a3b8',
-                          background: `${selectedPlacedTowerDef?.color ?? '#94a3b8'}18`,
-                        }}
-                      >
-                        {selectedPlacedTowerDef ? getAttackTypeLabel(selectedPlacedTowerDef.attackType) : 'Tower'}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="text-[11px] text-amber-300 font-bold">{gold}G</div>
-                </div>
-                <div className="grid grid-cols-2 gap-2 mb-2">
-                  {[
-                    { label: 'DMG', value: Math.round(selectedPlacedTower.stats.damage) },
-                    { label: 'RNG', value: selectedPlacedTower.stats.range.toFixed(1) },
-                    { label: 'SPD', value: selectedPlacedTower.stats.attackSpeed.toFixed(2) },
-                    { label: 'CRIT', value: `${Math.round(selectedPlacedTower.stats.critChance * 100)}%` },
-                  ].map((stat) => (
-                    <div
-                      key={stat.label}
-                      className="rounded-2xl px-2 py-2"
-                      style={{
-                        background: 'linear-gradient(180deg, rgba(15,23,42,0.86), rgba(15,23,42,0.58))',
-                        border: '1px solid rgba(71,85,105,0.18)',
-                      }}
-                    >
-                      <div className="text-[9px] uppercase tracking-[0.2em] text-slate-500">{stat.label}</div>
-                      <div className="text-sm font-black text-white">{stat.value}</div>
-                    </div>
-                  ))}
-                </div>
-                <div className="grid gap-2">
-                  {getTowerPathInfos(selectedPlacedTower.type).map((pathInfo) => {
-                    const currentTier = selectedPlacedTower.upgradePaths?.[pathInfo.path] ?? 0;
-                    const pathUpgrades = getUpgradePath(selectedPlacedTower.type, pathInfo.path);
-                    const nextUpgrade = pathUpgrades[currentTier];
-                    const allowed = canUpgrade(selectedPlacedTower.type, selectedPlacedTower.upgradePaths ?? [0, 0, 0], pathInfo.path);
-                    const affordable = !!nextUpgrade && gold >= nextUpgrade.cost;
-
-                    return (
-                      <button
-                        key={`${selectedPlacedTower.id}-${pathInfo.path}-side`}
-                        onClick={() => handleTowerBranchUpgrade(pathInfo.path)}
-                        disabled={!nextUpgrade || !allowed || !affordable}
-                        className="rounded-2xl border px-3 py-2 text-left disabled:opacity-40"
-                        style={{
-                          borderColor: allowed ? 'rgba(148,163,184,0.24)' : 'rgba(71,85,105,0.2)',
-                          background: 'linear-gradient(180deg, rgba(15,23,42,0.75), rgba(15,23,42,0.45))',
-                        }}
-                      >
-                        <div className="flex items-center justify-between text-xs mb-1">
-                          <span className="text-slate-200 font-bold">{pathInfo.name}</span>
-                          <span className="text-indigo-300">{currentTier}/5</span>
-                        </div>
-                        <div className="text-[10px] text-slate-500 mb-2">{nextUpgrade ? nextUpgrade.name : 'MAXED'}</div>
-                        <div className="text-[10px] text-amber-300 font-bold">{nextUpgrade ? `${nextUpgrade.cost}G` : 'LOCK'}</div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            ) : null}
-          </div>
-
+        <div className="h-full w-full flex items-center justify-center px-1">
           <div ref={containerRef} className="relative flex-1 h-full min-w-0 flex items-center justify-center">
             <div
               className="relative"
@@ -1184,7 +1106,7 @@ function PlayPageContent() {
               }}
             >
               <Swords className="w-4 h-4" />
-              <span className="tracking-wide">NEXT WAVE</span>
+              <span className="tracking-wide">다음 웨이브</span>
               {/* Shine overlay */}
               <div className="absolute inset-0 btn-shine-overlay opacity-60 pointer-events-none" />
             </motion.button>
@@ -1228,7 +1150,7 @@ function PlayPageContent() {
             <FastForward className="w-4 h-4 text-amber-400" style={speed > 1 ? { filter: 'drop-shadow(0 0 4px rgba(245,158,11,0.5))' } : undefined} />
             <span className={`font-bold tabular-nums ${speed > 1 ? 'text-amber-300 text-glow-gold' : 'text-amber-400'}`}>x{speed}</span>
             {speed === 3 && (
-              <span className="ml-0.5 px-1 py-px text-[8px] font-black rounded bg-amber-500/20 text-amber-300 uppercase tracking-wider">MAX</span>
+              <span className="ml-0.5 px-1 py-px text-[8px] font-black rounded bg-amber-500/20 text-amber-300 uppercase tracking-wider">최대</span>
             )}
           </motion.button>
 
@@ -1246,7 +1168,7 @@ function PlayPageContent() {
             }}
           >
             <BookOpen className="w-4 h-4" style={{ filter: 'drop-shadow(0 0 4px rgba(165,180,252,0.6))' }} />
-            <span className="tracking-wide">QUIZ</span>
+            <span className="tracking-wide">퀴즈</span>
             <div className="absolute inset-0 btn-shine-overlay opacity-40 pointer-events-none" />
           </motion.button>
         </div>
@@ -1263,7 +1185,7 @@ function PlayPageContent() {
               {currentHero.icon}
             </div>
             <div className="min-w-0 flex-1">
-              <div className="text-[10px] uppercase tracking-[0.2em] text-slate-400">Hero Support</div>
+              <div className="text-[10px] uppercase tracking-[0.2em] text-slate-400">영웅 지원</div>
               <div className="text-sm font-bold text-white truncate">{currentHero.nameKr}</div>
               <div className="text-[10px] text-slate-500 truncate">{currentHero.activeSkill.name} / {currentHero.ultimate.name}</div>
             </div>
@@ -1277,8 +1199,8 @@ function PlayPageContent() {
                 boxShadow: heroCooldowns.active <= 0 ? '0 0 18px rgba(56,189,248,0.22)' : undefined,
               }}
             >
-              <div className="text-[9px] uppercase tracking-[0.22em] text-white/60">Skill</div>
-              {heroCooldowns.active > 0 ? `${heroCooldowns.active.toFixed(1)}s` : 'ACTIVE'}
+              <div className="text-[9px] uppercase tracking-[0.22em] text-white/60">스킬</div>
+              {heroCooldowns.active > 0 ? `${heroCooldowns.active.toFixed(1)}s` : '발동'}
             </motion.button>
             <motion.button
               whileTap={{ scale: 0.96 }}
@@ -1290,21 +1212,21 @@ function PlayPageContent() {
                 boxShadow: heroCooldowns.ultimate <= 0 ? '0 0 18px rgba(236,72,153,0.22)' : undefined,
               }}
             >
-              <div className="text-[9px] uppercase tracking-[0.22em] text-white/60">Burst</div>
-              {heroCooldowns.ultimate > 0 ? `${heroCooldowns.ultimate.toFixed(1)}s` : 'ULT'}
+              <div className="text-[9px] uppercase tracking-[0.22em] text-white/60">버스트</div>
+              {heroCooldowns.ultimate > 0 ? `${heroCooldowns.ultimate.toFixed(1)}s` : '궁극기'}
             </motion.button>
           </div>
         </div>
 
-        <div className="px-3 py-2 border-b border-slate-800/40 min-h-[148px] xl:hidden">
-          {selectedPlacedTower ? (
+        {selectedPlacedTower && (
+          <div className="px-3 py-2 border-b border-slate-800/40">
             <div
               className="rounded-3xl border border-slate-700/50 bg-slate-950/75 px-3 py-2 shadow-2xl backdrop-blur-xl"
               style={{ boxShadow: '0 12px 30px rgba(2,6,23,0.28)' }}
             >
               <div className="flex items-center justify-between mb-2">
                 <div>
-                  <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Tower Paths</div>
+                  <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500">타워 경로</div>
                   <div className="flex items-center gap-2">
                     <span className="text-lg leading-none">{selectedPlacedTowerDef?.icon}</span>
                     <div className="text-sm font-bold text-white">{selectedPlacedTowerDef?.nameKr ?? selectedPlacedTower.type}</div>
@@ -1315,7 +1237,7 @@ function PlayPageContent() {
                         background: `${selectedPlacedTowerDef?.color ?? '#94a3b8'}18`,
                       }}
                     >
-                      {selectedPlacedTowerDef ? getAttackTypeLabel(selectedPlacedTowerDef.attackType) : 'Tower'}
+                      {selectedPlacedTowerDef ? getAttackTypeLabel(selectedPlacedTowerDef.attackType) : '타워'}
                     </span>
                   </div>
                 </div>
@@ -1323,10 +1245,10 @@ function PlayPageContent() {
               </div>
               <div className="grid grid-cols-4 gap-2 mb-2">
                 {[
-                  { label: 'DMG', value: Math.round(selectedPlacedTower.stats.damage) },
-                  { label: 'RNG', value: selectedPlacedTower.stats.range.toFixed(1) },
-                  { label: 'SPD', value: selectedPlacedTower.stats.attackSpeed.toFixed(2) },
-                  { label: 'CRIT', value: `${Math.round(selectedPlacedTower.stats.critChance * 100)}%` },
+                  { label: '피해', value: Math.round(selectedPlacedTower.stats.damage) },
+                  { label: '사거리', value: selectedPlacedTower.stats.range.toFixed(1) },
+                  { label: '속도', value: selectedPlacedTower.stats.attackSpeed.toFixed(2) },
+                  { label: '치명타', value: `${Math.round(selectedPlacedTower.stats.critChance * 100)}%` },
                 ].map((stat) => (
                   <div
                     key={stat.label}
@@ -1364,22 +1286,15 @@ function PlayPageContent() {
                         <span className="text-slate-200 font-bold">{pathInfo.name}</span>
                         <span className="text-indigo-300">{currentTier}/5</span>
                       </div>
-                      <div className="text-[10px] text-slate-500 mb-2">{nextUpgrade ? nextUpgrade.name : 'MAXED'}</div>
-                      <div className="text-[10px] text-amber-300 font-bold">{nextUpgrade ? `${nextUpgrade.cost}G` : 'LOCK'}</div>
+                      <div className="text-[10px] text-slate-500 mb-2">{nextUpgrade ? nextUpgrade.name : '만렙'}</div>
+                      <div className="text-[10px] text-amber-300 font-bold">{nextUpgrade ? `${nextUpgrade.cost}G` : '잠김'}</div>
                     </button>
                   );
                 })}
               </div>
             </div>
-          ) : (
-            <div className="h-full min-h-[132px] rounded-3xl border border-slate-800/40 bg-slate-950/30 px-4 py-3 flex items-center justify-center">
-              <div className="text-center">
-                <div className="text-[10px] uppercase tracking-[0.24em] text-slate-600">Tower Paths</div>
-                <div className="mt-2 text-sm font-semibold text-slate-500">타워를 선택하면 업그레이드 정보가 여기에 표시됩니다.</div>
-              </div>
-            </div>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Tower Selection Bar */}
         <div className="overflow-x-auto scrollbar-hide">
@@ -1420,7 +1335,7 @@ function PlayPageContent() {
                 }}
               >?</span>
               <span className="text-[10px] text-amber-200/90 font-bold truncate w-full text-center tracking-wide">
-                Random
+                랜덤
               </span>
               <span
                 className={`text-[10px] font-bold tabular-nums px-1.5 py-px rounded-full ${
@@ -1565,7 +1480,7 @@ function PlayPageContent() {
                     randomTowerNotif.isLegendary ? 'text-yellow-100 text-glow-gold' : 'text-slate-300'
                   }`}
                 >
-                  {randomTowerNotif.isLegendary ? 'LEGENDARY!' : 'Got Tower!'}
+                  {randomTowerNotif.isLegendary ? '전설!' : '타워 획득!'}
                 </motion.p>
                 <motion.p
                   initial={{ x: -20, opacity: 0 }}
@@ -1641,7 +1556,7 @@ function PlayPageContent() {
               filter: 'drop-shadow(0 0 8px rgba(245,158,11,0.3))',
             }}
           >
-            STAGE CLEAR!
+            스테이지 클리어!
           </motion.h2>
           <p className="relative z-10 text-slate-400 text-xs mb-4 tracking-wide">
             W{worldId}-{stageId}
@@ -1745,7 +1660,7 @@ function PlayPageContent() {
                 WebkitTextFillColor: 'transparent',
               }}
             >
-              REVIVE CHANCE!
+              부활 기회!
             </h2>
             <p className="text-sm text-slate-400 mb-1">
               영단어 퀴즈를 맞히면 HP 50%로 부활합니다
@@ -1834,7 +1749,7 @@ function PlayPageContent() {
                   color: '#fde047',
                 }}
               >
-                GO
+                도전
               </motion.div>
               <div className="absolute inset-0 btn-shine-overlay opacity-40 pointer-events-none" />
             </motion.button>
@@ -1860,8 +1775,8 @@ function PlayPageContent() {
                 boxShadow: '0 0 28px rgba(34,211,238,0.16)',
               }}
             >
-              <div className="mb-1 text-[10px] font-black uppercase tracking-[0.32em] text-cyan-300">Wave Engage</div>
-              <div className="text-3xl font-black tracking-[0.24em] text-white">WAVE {waveStartCue.wave}</div>
+              <div className="mb-1 text-[10px] font-black uppercase tracking-[0.32em] text-cyan-300">웨이브 시작</div>
+              <div className="text-3xl font-black tracking-[0.24em] text-white">웨이브 {waveStartCue.wave}</div>
               <div className="mt-2 flex items-center justify-center gap-2">
                 {[0, 1, 2].map((idx) => (
                   <motion.div
@@ -1908,7 +1823,7 @@ function PlayPageContent() {
                 className="mb-1 text-[10px] font-black uppercase tracking-[0.34em]"
                 style={{ color: heroCastEffect.color }}
               >
-                {heroCastEffect.mode === 'active' ? 'Hero Skill' : 'Hero Burst'}
+                {heroCastEffect.mode === 'active' ? '영웅 스킬' : '영웅 버스트'}
               </div>
               <div className="text-3xl font-black uppercase tracking-[0.22em] text-white">{heroCastEffect.label}</div>
               <div className="mt-2 text-xs uppercase tracking-[0.28em] text-white/50">{currentHero.nameKr}</div>
@@ -1993,7 +1908,7 @@ function PlayPageContent() {
                   filter: 'drop-shadow(0 0 20px rgba(239,68,68,0.4))',
                 }}
               >
-                BOSS INCOMING!
+                보스 등장!
               </motion.p>
               <p className="text-sm mt-1.5 tracking-[0.24em] uppercase" style={{ color: `${bossAccent.color}` }}>{bossWarningType}</p>
               <div className="mt-3 flex items-center justify-center gap-2">

@@ -1215,11 +1215,11 @@ function PlayPageContent() {
           </div>
         </div>
 
-        {selectedPlacedTower && (
-          <div className="absolute inset-x-0 bottom-full z-20 px-3 pb-2">
+        <div className="px-3 py-2 border-b border-slate-800/40 min-h-[148px]">
+          {selectedPlacedTower ? (
             <div
-              className="rounded-3xl border border-slate-700/50 bg-slate-950/90 px-3 py-2 shadow-2xl backdrop-blur-xl"
-              style={{ boxShadow: '0 -10px 30px rgba(2,6,23,0.45)' }}
+              className="rounded-3xl border border-slate-700/50 bg-slate-950/75 px-3 py-2 shadow-2xl backdrop-blur-xl"
+              style={{ boxShadow: '0 12px 30px rgba(2,6,23,0.28)' }}
             >
               <div className="flex items-center justify-between mb-2">
                 <div>
@@ -1290,8 +1290,15 @@ function PlayPageContent() {
                 })}
               </div>
             </div>
-          </div>
-        )}
+          ) : (
+            <div className="h-full min-h-[132px] rounded-3xl border border-slate-800/40 bg-slate-950/30 px-4 py-3 flex items-center justify-center">
+              <div className="text-center">
+                <div className="text-[10px] uppercase tracking-[0.24em] text-slate-600">Tower Paths</div>
+                <div className="mt-2 text-sm font-semibold text-slate-500">타워를 선택하면 업그레이드 정보가 여기에 표시됩니다.</div>
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* Tower Selection Bar */}
         <div className="overflow-x-auto scrollbar-hide">

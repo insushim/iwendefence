@@ -1537,6 +1537,19 @@ export class GameEngine {
 
     for (const enemy of targets) {
       this.applyDamage(enemy, damage, null, true);
+      this.effects.push({
+        id: nextId('fx'),
+        type: 'lightning',
+        position: { ...enemy.position },
+        radius: 54,
+        duration: 0.24,
+        elapsed: 0,
+        color: '#fbbf24',
+      });
+    }
+
+    if (targets.length > 0) {
+      this.triggerFlash('#fbbf24', 0.14, 0.18);
     }
   }
 
@@ -1552,6 +1565,22 @@ export class GameEngine {
         });
       }
     }
+
+    if (this.enemies.length > 0) {
+      const center = this.mapData
+        ? { x: (this.mapData.grid[0]?.length ?? 10) * this.cellSize / 2, y: (this.mapData.grid.length ?? 8) * this.cellSize / 2 }
+        : { x: 300, y: 220 };
+      this.effects.push({
+        id: nextId('fx'),
+        type: 'explosion',
+        position: center,
+        radius: this.cellSize * 4.2,
+        duration: 0.5,
+        elapsed: 0,
+        color: '#fb7185',
+      });
+      this.triggerFlash('#fb7185', 0.18, 0.24);
+    }
   }
 
   slowAllEnemies(percent: number, duration: number): void {
@@ -1562,6 +1591,22 @@ export class GameEngine {
         duration,
         sourceId: 'hero',
       });
+    }
+
+    if (this.enemies.length > 0) {
+      const center = this.mapData
+        ? { x: (this.mapData.grid[0]?.length ?? 10) * this.cellSize / 2, y: (this.mapData.grid.length ?? 8) * this.cellSize / 2 }
+        : { x: 300, y: 220 };
+      this.effects.push({
+        id: nextId('fx'),
+        type: 'ice',
+        position: center,
+        radius: this.cellSize * 4,
+        duration: 0.5,
+        elapsed: 0,
+        color: '#7dd3fc',
+      });
+      this.triggerFlash('#7dd3fc', 0.14, 0.22);
     }
   }
 
@@ -1581,10 +1626,12 @@ export class GameEngine {
   }
 
   stunArmoredEnemies(duration: number, bonusDamageMultiplier = 0): void {
+    let affected = 0;
     for (const enemy of this.enemies) {
       if (!['KNIGHT', 'GOLEM', 'SHIELD_BEARER', 'IRON_TURTLE', 'ARMORED_ORC'].includes(enemy.type)) {
         continue;
       }
+      affected += 1;
       this.addStatusEffect(enemy.id, {
         type: 'stun',
         value: 0,
@@ -1595,10 +1642,15 @@ export class GameEngine {
         this.applyDamage(enemy, Math.round(enemy.maxHp * bonusDamageMultiplier), null, false);
       }
     }
+
+    if (affected > 0) {
+      this.triggerFlash('#60a5fa', 0.12, 0.18);
+    }
   }
 
   startTeslaField(duration: number, damagePerSecond: number): void {
     this.teslaField = { remaining: duration, damagePerSecond };
+    this.triggerFlash('#38bdf8', 0.16, 0.24);
   }
 
   getHeroEmpowerRemaining(): number {

@@ -106,7 +106,6 @@ export function useGameLoop(
         soundRef.current?.playSFX('enemyDeath');
       },
       onWaveComplete: () => {
-        nextWave();
         soundRef.current?.playSFX('waveClear');
       },
       onAllWavesComplete: () => {

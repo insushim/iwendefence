@@ -120,6 +120,22 @@ function pickWaveUpgrades(): RoguelikeUpgrade[] {
   return shuffled.slice(0, 3);
 }
 
+function buildTowerStats(type: TowerType, upgradePaths: [number, number, number]) {
+  const baseStats = TOWER_DEFINITIONS[type].baseStats;
+  const accumulated = getAccumulatedEffects(type, upgradePaths);
+
+  return {
+    stats: {
+      damage: Math.round((baseStats.damage + (accumulated.damageAdd ?? 0)) * (1 + (accumulated.damageMultiply ?? 0))),
+      range: +((baseStats.range + (accumulated.rangeAdd ?? 0)) * (1 + (accumulated.rangeMultiply ?? 0))).toFixed(2),
+      attackSpeed: +((baseStats.attackSpeed + (accumulated.attackSpeedAdd ?? 0)) * (1 + (accumulated.attackSpeedMultiply ?? 0))).toFixed(3),
+      critChance: Math.min(1, +(baseStats.critChance + (accumulated.critChanceAdd ?? 0)).toFixed(2)),
+      critDamage: +(baseStats.critDamage + (accumulated.critDamageAdd ?? 0)).toFixed(2),
+    },
+    accumulated,
+  };
+}
+
 function fitBattlefieldSize(containerWidth: number, containerHeight: number): {
   cellSize: number;
   width: number;
@@ -245,6 +261,7 @@ function PlayPageContent() {
   const [heroCastEffect, setHeroCastEffect] = useState<null | { mode: 'active' | 'ultimate'; color: string; label: string }>(null);
   const [waveStartCue, setWaveStartCue] = useState<null | { wave: number }>(null);
   const rewardedWaveRef = useRef<Set<number>>(new Set());
+  const offeredWaveBonusRef = useRef<Set<number>>(new Set());
   const heroCastTimeoutRef = useRef<number | null>(null);
   const waveCueTimeoutRef = useRef<number | null>(null);
 
@@ -296,6 +313,7 @@ function PlayPageContent() {
     // Reset game state
     reset();
     rewardedWaveRef.current.clear();
+    offeredWaveBonusRef.current.clear();
     setRunBonuses({ damageMultiplier: 1, goldMultiplier: 1 });
     setShowUpgradePanel(false);
     setSelectedPlacedTowerId(null);
@@ -335,8 +353,8 @@ function PlayPageContent() {
 
     // Auto-start first wave after 3 seconds
     waveTimerRef.current = setTimeout(() => {
-      gameLoop.startNextWave();
-      flashWaveStartCue(1);
+      const nextWave = gameLoop.startNextWave();
+      if (nextWave >= 0) flashWaveStartCue(nextWave + 1);
     }, 3000);
 
     // Handle resize
@@ -407,18 +425,31 @@ function PlayPageContent() {
           return;
         }
 
+        if (
+          clearedWave > 0 &&
+          clearedWave % 2 === 0 &&
+          !offeredWaveBonusRef.current.has(clearedWave) &&
+          !showStageClear &&
+          Math.random() < 0.4
+        ) {
+          offeredWaveBonusRef.current.add(clearedWave);
+          setWaveBonusGold(30 + clearedWave * 5);
+          setShowWaveBonus(true);
+          return;
+        }
+
         // Wave ended, start next after delay
         if (waveTimerRef.current) clearTimeout(waveTimerRef.current);
         waveTimerRef.current = setTimeout(() => {
-          gameLoop.startNextWave();
-          flashWaveStartCue(clearedWave + 1);
+          const nextWave = gameLoop.startNextWave();
+          if (nextWave >= 0) flashWaveStartCue(nextWave + 1);
         }, 5000);
         clearInterval(checkInterval);
       }
     }, 500);
 
     return () => clearInterval(checkInterval);
-  }, [wave, gameLoop, isGameOver, score, setHighScore, showQuiz, showUpgradePanel, showWaveBonus, stageId, unlockStage, worldId, flashWaveStartCue]);
+  }, [wave, gameLoop, isGameOver, score, setHighScore, showQuiz, showStageClear, showUpgradePanel, showWaveBonus, stageId, unlockStage, worldId, flashWaveStartCue]);
 
   // Game over handling - offer revive quiz first (like "watch ad to continue")
   useEffect(() => {
@@ -431,21 +462,11 @@ function PlayPageContent() {
     }
   }, [isGameOver, showStageClear, reviveUsed]);
 
-  // Wave complete bonus quiz (like "watch ad for double gold")
   useEffect(() => {
-    if (wave > 0 && wave % 2 === 0 && !isGameOver && !showStageClear) {
-      // 40% chance to offer bonus quiz after every 2nd wave
-      if (Math.random() < 0.4) {
-        const bonusGold = 30 + wave * 5;
-        setWaveBonusGold(bonusGold);
-        setShowWaveBonus(true);
-
-        // Auto-dismiss after 5 seconds
-        const timer = setTimeout(() => setShowWaveBonus(false), 5000);
-        return () => clearTimeout(timer);
-      }
-    }
-  }, [wave, isGameOver, showStageClear]);
+    if (!showWaveBonus) return;
+    const timer = window.setTimeout(() => setShowWaveBonus(false), 5000);
+    return () => window.clearTimeout(timer);
+  }, [showWaveBonus]);
 
   // Handle revive quiz result
   const handleReviveQuiz = useCallback(() => {
@@ -663,17 +684,7 @@ function PlayPageContent() {
 
         const nextPaths: [number, number, number] = [...currentPaths] as [number, number, number];
         nextPaths[path] = nextTier;
-        const accumulated = getAccumulatedEffects(tower.type, nextPaths);
-        const nextStats = { ...tower.stats };
-
-        if (upgrade.effect.damageAdd) nextStats.damage += upgrade.effect.damageAdd;
-        if (upgrade.effect.damageMultiply) nextStats.damage = Math.round(nextStats.damage * (1 + upgrade.effect.damageMultiply));
-        if (upgrade.effect.rangeAdd) nextStats.range += upgrade.effect.rangeAdd;
-        if (upgrade.effect.rangeMultiply) nextStats.range = +(nextStats.range * (1 + upgrade.effect.rangeMultiply)).toFixed(2);
-        if (upgrade.effect.attackSpeedAdd) nextStats.attackSpeed += upgrade.effect.attackSpeedAdd;
-        if (upgrade.effect.attackSpeedMultiply) nextStats.attackSpeed = +(nextStats.attackSpeed * (1 + upgrade.effect.attackSpeedMultiply)).toFixed(3);
-        if (upgrade.effect.critChanceAdd) nextStats.critChance = Math.min(1, nextStats.critChance + upgrade.effect.critChanceAdd);
-        if (upgrade.effect.critDamageAdd) nextStats.critDamage = +(nextStats.critDamage + upgrade.effect.critDamageAdd).toFixed(2);
+        const { stats: nextStats, accumulated } = buildTowerStats(tower.type, nextPaths);
 
         return {
           ...tower,
@@ -943,9 +954,9 @@ function PlayPageContent() {
       clearTimeout(waveTimerRef.current);
       waveTimerRef.current = null;
     }
-    gameLoop.startNextWave();
-    flashWaveStartCue(wave + 1);
-  }, [flashWaveStartCue, gameLoop, wave]);
+    const nextWave = gameLoop.startNextWave();
+    if (nextWave >= 0) flashWaveStartCue(nextWave + 1);
+  }, [flashWaveStartCue, gameLoop]);
 
   const handleManualQuiz = useCallback(() => {
     if (!isPaused) togglePause();
@@ -958,6 +969,7 @@ function PlayPageContent() {
     setShowStageClear(false);
     setShowUpgradePanel(false);
     rewardedWaveRef.current.clear();
+    offeredWaveBonusRef.current.clear();
     setRunBonuses({ damageMultiplier: 1, goldMultiplier: 1 });
     setSelectedPlacedTowerId(null);
     setHeroCooldowns({ active: 0, ultimate: 0 });
@@ -988,10 +1000,11 @@ function PlayPageContent() {
       stageLoadedRef.current = true;
 
       waveTimerRef.current = setTimeout(() => {
-        gameLoop.startNextWave();
+        const nextWave = gameLoop.startNextWave();
+        if (nextWave >= 0) flashWaveStartCue(nextWave + 1);
       }, 3000);
     }, 100);
-  }, [gameLoop, reset, stage.mapData, stage.waves]);
+  }, [flashWaveStartCue, gameLoop, reset, stage.mapData, stage.waves]);
 
   return (
     <div className="h-dvh flex flex-col bg-[#0F172A] relative overflow-hidden game-area">

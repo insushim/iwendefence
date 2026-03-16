@@ -148,6 +148,15 @@ function basicGlow(color: number, opacity: number): THREE.MeshBasicMaterial {
   });
 }
 
+function setShadowRecursive(object: THREE.Object3D, cast: boolean, receive: boolean): void {
+  object.traverse((child) => {
+    const mesh = child as THREE.Mesh;
+    if (!('castShadow' in mesh)) return;
+    mesh.castShadow = cast;
+    mesh.receiveShadow = receive;
+  });
+}
+
 function applyGhostMaterial(group: THREE.Group, color: number, canPlace: boolean): void {
   group.traverse((child) => {
     const mesh = child as THREE.Mesh;
@@ -1075,6 +1084,7 @@ function createTowerMesh(type: TowerType, selected: boolean): THREE.Group {
   }
 
   if (selected) addSelectionRing(group, color);
+  setShadowRecursive(group, true, true);
   return group;
 }
 
@@ -1385,6 +1395,7 @@ function createEnemyMesh(enemy: Enemy): THREE.Group {
     group.add(shield);
   }
 
+  setShadowRecursive(group, true, true);
   return group;
 }
 
@@ -1428,6 +1439,7 @@ function createMapTile(cell: number): THREE.Mesh {
     new THREE.BoxGeometry(0.94, isPath ? 0.12 : 0.08, 0.94),
     material
   );
+  tile.castShadow = true;
   tile.receiveShadow = true;
   return tile;
 }
@@ -1597,24 +1609,40 @@ export default function ThreeBattlefield({
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(width, height, false);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
     renderer.outputColorSpace = THREE.SRGBColorSpace;
-    renderer.shadowMap.enabled = false;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.1;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     host.innerHTML = '';
     host.appendChild(renderer.domElement);
 
     const scene = new THREE.Scene();
-    scene.fog = new THREE.Fog(0x071525, 8, 30);
+    scene.fog = new THREE.Fog(0x071525, 10, 32);
 
     const camera = new THREE.PerspectiveCamera(30, width / height, 0.1, 100);
     camera.position.set(8, 10.6, 16.4);
     camera.lookAt(8, 0, 5.1);
 
-    const ambientLight = new THREE.AmbientLight(0xa5f3fc, 1.32);
+    const ambientLight = new THREE.AmbientLight(0xa5f3fc, 0.92);
     scene.add(ambientLight);
 
+    const hemiLight = new THREE.HemisphereLight(0xb9f7ff, 0x09131f, 0.9);
+    scene.add(hemiLight);
+
     const keyLight = new THREE.DirectionalLight(0xffffff, 1.65);
-    keyLight.position.set(4, 10, 7);
+    keyLight.position.set(5, 12, 6);
+    keyLight.castShadow = true;
+    keyLight.shadow.mapSize.width = 1024;
+    keyLight.shadow.mapSize.height = 1024;
+    keyLight.shadow.camera.near = 1;
+    keyLight.shadow.camera.far = 30;
+    keyLight.shadow.camera.left = -12;
+    keyLight.shadow.camera.right = 12;
+    keyLight.shadow.camera.top = 12;
+    keyLight.shadow.camera.bottom = -12;
+    keyLight.shadow.bias = -0.0008;
     scene.add(keyLight);
 
     const fillLight = new THREE.PointLight(0x2dd4bf, 15, 26, 2);
@@ -1643,8 +1671,8 @@ export default function ThreeBattlefield({
       new THREE.PlaneGeometry(22, 15),
       new THREE.MeshStandardMaterial({
         color: 0x0b2b28,
-        roughness: 1,
-        metalness: 0,
+        roughness: 0.98,
+        metalness: 0.02,
       })
     );
     ground.rotation.x = -Math.PI / 2;
@@ -1654,9 +1682,10 @@ export default function ThreeBattlefield({
 
     const board = new THREE.Mesh(
       new THREE.BoxGeometry(17.8, 0.32, 11.8),
-      new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.82, metalness: 0.08 })
+      new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.74, metalness: 0.12 })
     );
     board.position.set(7.5, -0.18, 4.5);
+    board.receiveShadow = true;
     scene.add(board);
 
     const backWall = new THREE.Mesh(
@@ -1915,6 +1944,8 @@ export default function ThreeBattlefield({
               metalness: 0.02,
             })
           );
+          terrainBase.castShadow = true;
+          terrainBase.receiveShadow = true;
           terrainBase.position.set(col + 0.5, -terrainHeight * 0.5 + (cell === 1 ? 0.01 : 0), rows - row - 0.5);
           mapGroup.add(terrainBase);
 

@@ -2031,9 +2031,7 @@ export default function ThreeBattlefield({
     const scene = new THREE.Scene();
     scene.fog = new THREE.Fog(theme.fog, 10, 32);
 
-    const camera = new THREE.PerspectiveCamera(28, width / height, 0.1, 100);
-    camera.position.set(8, 9.7, 15.1);
-    camera.lookAt(8, 0.2, 4.8);
+    const camera = new THREE.PerspectiveCamera(40, width / height, 0.1, 100);
 
     const ambientLight = new THREE.AmbientLight(0xa5f3fc, 0.92);
     scene.add(ambientLight);
@@ -2076,6 +2074,17 @@ export default function ThreeBattlefield({
     scene.add(mapGroup, towerGroup, enemyGroup, projectileGroup, overlayGroup, burstGroup);
     const rows = getEngine()?.getMapData()?.grid.length ?? 10;
     const cols = getEngine()?.getMapData()?.grid[0]?.length ?? 16;
+    const boardCenterX = cols / 2;
+    const boardCenterZ = rows / 2;
+    const visibleWidth = cols + 2.2;
+    const visibleDepth = rows + 3.4;
+    const fovRadians = THREE.MathUtils.degToRad(camera.fov);
+    const fitHeightDistance = (visibleDepth * 0.5) / Math.tan(fovRadians / 2);
+    const fitWidthDistance = (visibleWidth * 0.5) / (Math.tan(fovRadians / 2) * camera.aspect);
+    const fitDistance = Math.max(fitHeightDistance, fitWidthDistance) * 1.12;
+    camera.position.set(boardCenterX, fitDistance * 0.88, boardCenterZ + fitDistance * 1.02);
+    camera.lookAt(boardCenterX, 0.12, boardCenterZ + 0.2);
+    camera.updateProjectionMatrix();
     const groundTexture = createGroundTexture(theme);
     groundTexture.repeat.set(2.2, 1.6);
     const boardTexture = createBoardTexture(theme);

@@ -439,12 +439,13 @@ function PlayPageContent() {
         }
 
         // Wave ended, start next after delay
-        if (waveTimerRef.current) clearTimeout(waveTimerRef.current);
-        waveTimerRef.current = setTimeout(() => {
-          const nextWave = gameLoop.startNextWave();
-          if (nextWave >= 0) flashWaveStartCue(nextWave + 1);
-        }, 5000);
-        clearInterval(checkInterval);
+        if (!waveTimerRef.current) {
+          waveTimerRef.current = setTimeout(() => {
+            waveTimerRef.current = null;
+            const nextWave = gameLoop.startNextWave();
+            if (nextWave >= 0) flashWaveStartCue(nextWave + 1);
+          }, 4000);
+        }
       }
     }, 500);
 
@@ -1134,7 +1135,6 @@ function PlayPageContent() {
           className="hidden lg:flex flex-col w-72 shrink-0 border-l border-slate-800/30"
           style={{
             background: 'linear-gradient(180deg, rgba(15,23,42,0.98) 0%, rgba(15,23,42,0.94) 100%)',
-            backdropFilter: 'blur(16px)',
           }}
         >
           {/* Controls row */}
@@ -1231,7 +1231,7 @@ function PlayPageContent() {
           {/* Tower upgrade panel (inside side panel – no layout impact) */}
           {selectedPlacedTower && (
             <div className="px-2 py-2 border-b border-slate-800/40">
-              <div className="rounded-2xl border border-slate-700/50 bg-slate-950/75 px-2 py-2 backdrop-blur-xl">
+              <div className="rounded-2xl border border-slate-700/50 bg-slate-950/90 px-2 py-2">
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-1.5">
                     <span className="text-base leading-none">{selectedPlacedTowerDef?.icon}</span>

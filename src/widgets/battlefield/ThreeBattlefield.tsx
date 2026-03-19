@@ -2018,12 +2018,11 @@ export default function ThreeBattlefield({
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(width, height, false);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.25));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.32;
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.shadowMap.enabled = false;
     host.innerHTML = '';
     host.appendChild(renderer.domElement);
 
@@ -2095,7 +2094,7 @@ export default function ThreeBattlefield({
 
     const composer = new EffectComposer(renderer);
     composer.addPass(new RenderPass(scene, camera));
-    const bloomPass = new UnrealBloomPass(new THREE.Vector2(width, height), 0.18, 0.58, 1.05);
+    const bloomPass = new UnrealBloomPass(new THREE.Vector2(width, height), 0.15, 0.2, 0.9);
     composer.addPass(bloomPass);
 
     const ground = new THREE.Mesh(
@@ -3114,8 +3113,8 @@ export default function ThreeBattlefield({
         (rightGlow.material as THREE.MeshBasicMaterial).color.setHex(bossDangerLevel > 0.1 ? 0xef4444 : 0x0f766e);
         (sideGlow.material as THREE.MeshBasicMaterial).opacity = 0.2 + bossDangerLevel * 0.12;
         (rightGlow.material as THREE.MeshBasicMaterial).opacity = 0.2 + bossDangerLevel * 0.12;
-        bloomPass.strength = 0.28 + bossDangerLevel * 0.24;
-        bloomPass.radius = 0.72 + bossDangerLevel * 0.08;
+        bloomPass.strength = 0.18 + bossDangerLevel * 0.12;
+        bloomPass.radius = 0.2 + bossDangerLevel * 0.05;
         for (let i = 0; i < edgeGlows.length; i++) {
           const glow = edgeGlows[i];
           const mat = glow.material as THREE.MeshBasicMaterial;

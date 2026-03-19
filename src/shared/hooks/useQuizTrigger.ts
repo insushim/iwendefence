@@ -54,10 +54,10 @@ interface QuizTriggerReturn {
 // ============================================================
 
 /** Minimum seconds between any two quiz triggers (anti-spam) */
-const GLOBAL_COOLDOWN_MS = 15_000;
+const GLOBAL_COOLDOWN_MS = 8_000;
 
-/** Wave bonus quiz chance (40%) */
-const WAVE_BONUS_CHANCE = 0.4;
+/** Wave bonus quiz chance (60%) */
+const WAVE_BONUS_CHANCE = 0.6;
 
 /** HP threshold for crisis trigger */
 const CRISIS_HP_THRESHOLD = 0.25;
@@ -630,8 +630,8 @@ export function useQuizTrigger({ showQuiz, setShowQuiz, isTerminal }: QuizTrigge
       if (showQuizRef.current) return;
       elapsedSecondsRef.current += 1;
 
-      // Every 45 seconds of active gameplay, offer a quick quiz
-      if (elapsedSecondsRef.current >= 45) {
+      // Every 30 seconds of active gameplay, offer a quick quiz
+      if (elapsedSecondsRef.current >= 30) {
         const timeSinceLastQuiz = Date.now() - lastQuizTimeRef.current;
         if (timeSinceLastQuiz < GLOBAL_COOLDOWN_MS) return;
 

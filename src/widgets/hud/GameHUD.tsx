@@ -130,20 +130,8 @@ function HPBar({ hp, maxHp }: { hp: number; maxHp: number }) {
   return (
     <div className="flex items-center gap-1.5 min-w-0">
       {/* Heart icon with pulse */}
-      <motion.div
-        className="relative flex-shrink-0"
-        animate={
-          isLowHp
-            ? {
-                scale: [1, 1.25, 1, 1.15, 1],
-              }
-            : {}
-        }
-        transition={
-          isLowHp
-            ? { duration: 0.8, repeat: Infinity, ease: 'easeInOut' }
-            : {}
-        }
+      <div
+        className={`relative flex-shrink-0 ${isLowHp ? 'animate-pulse' : ''}`}
       >
         <Heart
           className={`w-[18px] h-[18px] drop-shadow-lg ${
@@ -156,7 +144,7 @@ function HPBar({ hp, maxHp }: { hp: number; maxHp: number }) {
           className="absolute inset-0 rounded-full blur-sm -z-10"
           style={{ background: glowColor, transform: 'scale(1.6)' }}
         />
-      </motion.div>
+      </div>
 
       <div className="flex flex-col gap-[3px] min-w-[72px]">
         {/* HP numbers */}
@@ -415,19 +403,9 @@ function ComboBadge({ combo }: { combo: number }) {
       }}
     >
       {/* Fire icon with animated glow */}
-      <motion.div
-        animate={{
-          scale: [1, 1.15, 1],
-          rotate: [0, -8, 8, 0],
-        }}
-        transition={{
-          duration: 0.6,
-          repeat: Infinity,
-          ease: 'easeInOut',
-        }}
-      >
+      <div className="animate-pulse">
         <Flame className="w-3.5 h-3.5 text-orange-400" fill="currentColor" />
-      </motion.div>
+      </div>
       <span className={`text-[11px] font-extrabold bg-gradient-to-r ${fireColor} bg-clip-text text-transparent`}>
         {combo}
       </span>
@@ -559,11 +537,9 @@ export default function GameHUD({
       className="relative z-20 select-none"
       style={{
         background: isLowHp
-          ? 'linear-gradient(180deg, rgba(15,23,42,0.95) 0%, rgba(30,10,10,0.9) 100%)'
-          : 'linear-gradient(180deg, rgba(15,23,42,0.95) 0%, rgba(15,23,42,0.85) 100%)',
-        backdropFilter: 'blur(16px) saturate(1.2)',
-        WebkitBackdropFilter: 'blur(16px) saturate(1.2)',
-        borderBottom: '1px solid rgba(100,116,139,0.2)',
+          ? 'linear-gradient(180deg, rgba(10,15,30,0.97) 0%, rgba(30,10,10,0.95) 100%)'
+          : 'linear-gradient(180deg, rgba(10,15,30,0.97) 0%, rgba(10,15,30,0.92) 100%)',
+        borderBottom: '1px solid rgba(99,102,241,0.15)',
         boxShadow: isLowHp
           ? '0 2px 20px rgba(239,68,68,0.2), 0 1px 3px rgba(0,0,0,0.4), inset 0 -1px 0 rgba(255,255,255,0.03)'
           : '0 2px 12px rgba(0,0,0,0.3), 0 1px 3px rgba(0,0,0,0.4), inset 0 -1px 0 rgba(255,255,255,0.03)',
@@ -580,13 +556,11 @@ export default function GameHUD({
 
       {/* Low HP vignette overlay */}
       {isLowHp && (
-        <motion.div
-          className="absolute inset-0 pointer-events-none rounded-b-sm"
-          animate={{ opacity: [0.15, 0.35, 0.15] }}
-          transition={{ duration: 1.2, repeat: Infinity, ease: 'easeInOut' }}
+        <div
+          className="absolute inset-0 pointer-events-none rounded-b-sm animate-pulse"
           style={{
             background:
-              'linear-gradient(90deg, rgba(239,68,68,0.15) 0%, transparent 30%, transparent 70%, rgba(239,68,68,0.15) 100%)',
+              'linear-gradient(90deg, rgba(239,68,68,0.25) 0%, transparent 30%, transparent 70%, rgba(239,68,68,0.25) 100%)',
           }}
         />
       )}

@@ -7,7 +7,7 @@ import { useRef, useEffect, useCallback } from 'react';
 import { useGameStore } from '../lib/store';
 import { GameEngine } from '../lib/gameEngine';
 import type { GameEngineCallbacks } from '../lib/gameEngine';
-import { renderGame, type PlacementInfo } from '../lib/renderer';
+import { renderGame, invalidateBackgroundCache, type PlacementInfo } from '../lib/renderer';
 import { SoundEngine } from '../lib/soundEngine';
 import type { SFXType } from '../lib/soundEngine';
 import type {
@@ -259,6 +259,7 @@ export function useGameLoop(
   }, [nextWave]);
 
   const loadStage = useCallback((mapData: MapData, waves: Wave[], cellSize: number) => {
+    invalidateBackgroundCache();
     engineRef.current?.loadStage(mapData, waves, cellSize);
   }, []);
 

@@ -33,11 +33,47 @@ export function lerpPosition(a: WorldPosition, b: WorldPosition, t: number): Wor
   };
 }
 
+// ── Path Segment Cache ───────────────────────────────────────
+// Avoids recomputing segment lengths every frame for every enemy
+interface PathCache {
+  path: [number, number][];
+  cellSize: number;
+  segmentLengths: number[];
+  totalLength: number;
+  centers: WorldPosition[];
+}
+
+let _pathCache: PathCache | null = null;
+
+function getPathCache(path: [number, number][], cellSize: number): PathCache {
+  if (
+    _pathCache &&
+    _pathCache.path === path &&
+    _pathCache.cellSize === cellSize
+  ) {
+    return _pathCache;
+  }
+
+  const centers: WorldPosition[] = path.map(p => getCellCenter(p[0], p[1], cellSize));
+  const segmentLengths: number[] = [];
+  let totalLength = 0;
+
+  for (let i = 0; i < path.length - 1; i++) {
+    const len = getDistanceBetweenPoints(centers[i], centers[i + 1]);
+    segmentLengths.push(len);
+    totalLength += len;
+  }
+
+  _pathCache = { path, cellSize, segmentLengths, totalLength, centers };
+  return _pathCache;
+}
+
 /**
  * Given a path (array of [row, col] waypoints) and a progress value (0..1 across the
  * entire path), return the interpolated world position and the current segment index.
  *
  * Progress 0 = at path[0], progress 1 = at path[path.length-1].
+ * Uses cached segment lengths to avoid O(n) recomputation per call.
  */
 export function getPositionOnPath(
   path: [number, number][],
@@ -53,36 +89,23 @@ export function getPositionOnPath(
     return { position: center, segmentIndex: 0 };
   }
 
-  // Compute segment lengths
-  const segmentLengths: number[] = [];
-  let totalLength = 0;
+  const cache = getPathCache(path, cellSize);
 
-  for (let i = 0; i < path.length - 1; i++) {
-    const a = getCellCenter(path[i][0], path[i][1], cellSize);
-    const b = getCellCenter(path[i + 1][0], path[i + 1][1], cellSize);
-    const len = getDistanceBetweenPoints(a, b);
-    segmentLengths.push(len);
-    totalLength += len;
-  }
-
-  if (totalLength === 0) {
-    const center = getCellCenter(path[0][0], path[0][1], cellSize);
-    return { position: center, segmentIndex: 0 };
+  if (cache.totalLength === 0) {
+    return { position: cache.centers[0], segmentIndex: 0 };
   }
 
   const clampedProgress = Math.max(0, Math.min(1, progress));
-  const targetDist = clampedProgress * totalLength;
+  const targetDist = clampedProgress * cache.totalLength;
 
   let accumulated = 0;
-  for (let i = 0; i < segmentLengths.length; i++) {
-    const segLen = segmentLengths[i];
+  for (let i = 0; i < cache.segmentLengths.length; i++) {
+    const segLen = cache.segmentLengths[i];
 
     if (accumulated + segLen >= targetDist) {
       const segProgress = segLen > 0 ? (targetDist - accumulated) / segLen : 0;
-      const a = getCellCenter(path[i][0], path[i][1], cellSize);
-      const b = getCellCenter(path[i + 1][0], path[i + 1][1], cellSize);
       return {
-        position: lerpPosition(a, b, segProgress),
+        position: lerpPosition(cache.centers[i], cache.centers[i + 1], segProgress),
         segmentIndex: i,
       };
     }
@@ -90,9 +113,8 @@ export function getPositionOnPath(
   }
 
   // At end of path
-  const lastWp = path[path.length - 1];
   return {
-    position: getCellCenter(lastWp[0], lastWp[1], cellSize),
+    position: cache.centers[cache.centers.length - 1],
     segmentIndex: path.length - 2,
   };
 }

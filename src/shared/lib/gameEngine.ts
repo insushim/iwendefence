@@ -1298,6 +1298,7 @@ export class GameEngine {
     }
 
     enemy.hp = Math.max(0, enemy.hp - remainingDamage);
+    enemy.lastHitTime = this.gameTime;
 
     // Floating damage text
     if (remainingDamage > 0) {

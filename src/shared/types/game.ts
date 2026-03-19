@@ -145,6 +145,7 @@ export interface Enemy {
   shield?: number;
   shieldMax?: number;
   bossAbilityCooldown?: number;
+  lastHitTime?: number;
 }
 
 // ── Hero ─────────────────────────────────────────────────────

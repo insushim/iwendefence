@@ -39,6 +39,7 @@ import { particleSystem } from './particleSystem';
 
 const DEPTH = 0.12;
 let _time = 0;
+let _lastFrameTime = 0;
 function getTime(): number { return _time; }
 function updateTime(): void { _time = Date.now() / 1000; }
 
@@ -52,9 +53,9 @@ interface TileStyle {
 }
 
 const TERRAIN_STYLES: Record<number, TileStyle> = {
-  0: { top: '#5a9c4f', topLight: '#6fb85f', left: '#3d6b35', right: '#4a7c3f' },
+  0: { top: '#4d8c3f', topLight: '#5fa84a', left: '#2d5a25', right: '#3d6b35' },
   1: { top: '#9b8365', topLight: '#b09575', left: '#6b5540', right: '#7d6550' },
-  2: { top: '#5fa84a', topLight: '#72c05a', left: '#3a7030', right: '#48843a' },
+  2: { top: '#528a3e', topLight: '#65a84d', left: '#346528', right: '#417a35' },
   3: { top: '#8b8b8b', topLight: '#9b9b9b', left: '#555555', right: '#6b6b6b' },
   4: { top: '#3d7a2e', topLight: '#4d8a3e', left: '#1d4a0e', right: '#2d5a1e' },
   5: { top: '#d4b36a', topLight: '#e4c37a', left: '#a4834a', right: '#b49350' },
@@ -65,17 +66,17 @@ const TERRAIN_STYLES: Record<number, TileStyle> = {
 };
 
 const TOWER_PALETTE: Record<string, { base: string; body: string; top: string; glow: string; accent: string }> = {
-  ARCHER: { base: '#3a6a2a', body: '#4a9a3a', top: '#6abb5a', glow: 'rgba(74,154,58,0.4)', accent: '#2d5a1e' },
-  MAGIC: { base: '#5a2a8a', body: '#8944cc', top: '#bb66ff', glow: 'rgba(137,68,204,0.5)', accent: '#6622aa' },
-  CANNON: { base: '#555555', body: '#777777', top: '#999999', glow: 'rgba(120,120,120,0.3)', accent: '#333333' },
+  ARCHER: { base: '#2d5a1e', body: '#3d8a2e', top: '#5cb85c', glow: 'rgba(92,184,92,0.45)', accent: '#1e4a12' },
+  MAGIC: { base: '#4a1a7a', body: '#7b38c8', top: '#a855f7', glow: 'rgba(168,85,247,0.55)', accent: '#5b1aaa' },
+  CANNON: { base: '#4a4a4a', body: '#6b7280', top: '#9ca3af', glow: 'rgba(156,163,175,0.35)', accent: '#374151' },
   ICE: { base: '#1a7a8a', body: '#44bbcc', top: '#88eeff', glow: 'rgba(68,187,204,0.5)', accent: '#0a5a6a' },
-  LIGHTNING: { base: '#8a7a00', body: '#ccbb22', top: '#ffee44', glow: 'rgba(255,238,68,0.5)', accent: '#aa9900' },
+  LIGHTNING: { base: '#92400e', body: '#d97706', top: '#fbbf24', glow: 'rgba(251,191,36,0.55)', accent: '#b45309' },
   POISON: { base: '#1a6a1a', body: '#33aa33', top: '#55dd55', glow: 'rgba(51,170,51,0.4)', accent: '#0a4a0a' },
   HEALER: { base: '#6aaa8a', body: '#aaddcc', top: '#ffffff', glow: 'rgba(170,221,204,0.5)', accent: '#448866' },
   BARRICADE: { base: '#5a3a10', body: '#8b6914', top: '#bb9944', glow: 'rgba(139,105,20,0.3)', accent: '#3a2a00' },
   GOLDMINE: { base: '#8a6a00', body: '#ccaa22', top: '#ffd700', glow: 'rgba(255,215,0,0.5)', accent: '#996600' },
   SNIPER: { base: '#1a3a10', body: '#2d5a1e', top: '#4a8a3e', glow: 'rgba(45,90,30,0.3)', accent: '#0a2a00' },
-  FLAME: { base: '#8a2200', body: '#cc4411', top: '#ff6633', glow: 'rgba(255,102,51,0.5)', accent: '#661100' },
+  FLAME: { base: '#7c1d1d', body: '#dc2626', top: '#f87171', glow: 'rgba(248,113,113,0.5)', accent: '#991b1b' },
   WORD: { base: '#6a22aa', body: '#9944dd', top: '#cc66ff', glow: 'rgba(153,68,221,0.6)', accent: '#4400aa' },
   METEOR: { base: '#8b2500', body: '#ff4500', top: '#ff6a33', glow: 'rgba(255,69,0,0.6)', accent: '#cc3300' },
   VOID: { base: '#1a0033', body: '#4b0082', top: '#7b33b0', glow: 'rgba(75,0,130,0.6)', accent: '#2d004d' },
@@ -198,6 +199,54 @@ const EFFECT_ICON_CHARS: Record<string, string> = {
 let _waveAnnounce: { wave: number; startTime: number; isBoss: boolean } | null = null;
 let _lastRenderedWave = -1;
 
+// ── Background Cache (Offscreen Canvas) ─────────────────────
+let _bgCache: HTMLCanvasElement | null = null;
+let _bgCacheKey = '';
+let _bgCacheValid = false;
+
+export function invalidateBackgroundCache(): void {
+  _bgCacheValid = false;
+}
+
+function getOrCreateBgCache(width: number, height: number): HTMLCanvasElement {
+  if (!_bgCache || _bgCache.width !== width || _bgCache.height !== height) {
+    _bgCache = document.createElement('canvas');
+    _bgCache.width = width;
+    _bgCache.height = height;
+    _bgCacheValid = false;
+  }
+  return _bgCache;
+}
+
+function renderCachedBackground(
+  ctx: CanvasRenderingContext2D,
+  mapData: MapData,
+  cellSize: number
+): void {
+  const cw = ctx.canvas.width;
+  const ch = ctx.canvas.height;
+  const cacheKey = `${mapData.grid.length}_${mapData.grid[0]?.length}_${cellSize}`;
+
+  const cache = getOrCreateBgCache(cw, ch);
+
+  if (!_bgCacheValid || _bgCacheKey !== cacheKey) {
+    const bgCtx = cache.getContext('2d');
+    if (bgCtx) {
+      bgCtx.clearRect(0, 0, cw, ch);
+      drawMapStatic(bgCtx, mapData, cellSize);
+      drawPath(bgCtx, mapData.path, cellSize);
+    }
+    _bgCacheKey = cacheKey;
+    _bgCacheValid = true;
+  }
+
+  // Blit cached background
+  ctx.drawImage(cache, 0, 0);
+
+  // Only draw animated elements on top (grass sway, ambient particles)
+  drawMapAnimated(ctx, mapData, cellSize);
+}
+
 export function triggerWaveAnnounce(wave: number, isBoss: boolean): void {
   _waveAnnounce = { wave, startTime: _time, isBoss };
 }
@@ -313,8 +362,7 @@ export function renderGame(
   }
 
   if (mapData && renderWorld) {
-    drawMap(ctx, mapData, cellSize);
-    drawPath(ctx, mapData.path, cellSize);
+    renderCachedBackground(ctx, mapData, cellSize);
   }
 
   // ── Treasure Chests ───────────────────────────────────
@@ -371,7 +419,8 @@ export function renderGame(
   drawDamageTexts(ctx, engine.getDamageTexts());
 
   // ── Particle System ───────────────────────────────────
-  const rawDt = 1 / 60; // approximate frame dt
+  const rawDt = Math.min(1 / 30, (performance.now() - (_lastFrameTime || performance.now())) / 1000);
+  _lastFrameTime = performance.now();
   particleSystem.update(rawDt);
   particleSystem.render(ctx);
 
@@ -507,26 +556,51 @@ function drawKillCombo(
   ctx.textAlign = 'right';
   ctx.textBaseline = 'top';
 
-  const x = cw - 15;
-  const y = 40;
+  const x = cw - 12;
+  const y = 38;
 
-  // Background pill
   const text = `${combo} KILL`;
-  const fontSize = combo >= 10 ? 16 : 14;
+  const fontSize = combo >= 20 ? 18 : combo >= 10 ? 16 : 14;
   ctx.font = `bold ${fontSize}px sans-serif`;
-  const tw = ctx.measureText(text).width + 20;
+  const tw = ctx.measureText(text).width + 24;
+  const pillH = fontSize + 8;
 
-  ctx.fillStyle = 'rgba(255,50,50,0.3)';
+  // Fire gradient background pill
+  const pillGrad = ctx.createLinearGradient(x - tw, y, x, y);
+  const intensity = Math.min(1, combo / 30);
+  pillGrad.addColorStop(0, `rgba(${180 + intensity * 75},${30 + (1 - intensity) * 30},0,${0.3 + intensity * 0.4})`);
+  pillGrad.addColorStop(1, `rgba(255,${50 - intensity * 30},${20 - intensity * 20},${0.4 + intensity * 0.3})`);
+  ctx.fillStyle = pillGrad;
   ctx.beginPath();
-  ctx.roundRect(x - tw, y - 2, tw, 22, 11);
+  ctx.roundRect(x - tw, y - 2, tw, pillH, pillH / 2);
   ctx.fill();
 
-  // Text with glow
-  ctx.shadowColor = '#ff4444';
-  ctx.shadowBlur = combo >= 10 ? 12 : 6;
-  ctx.fillStyle = combo >= 10 ? '#ffcc00' : '#ff6644';
-  ctx.fillText(text, x - 8, y + 1);
-  ctx.shadowBlur = 0;
+  // Border glow
+  ctx.strokeStyle = `rgba(255,${150 - intensity * 100},0,${0.4 + intensity * 0.3})`;
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  // Text
+  const textGrad = ctx.createLinearGradient(x - tw, y, x, y);
+  if (combo >= 20) {
+    textGrad.addColorStop(0, '#ffee00');
+    textGrad.addColorStop(1, '#ffffff');
+  } else if (combo >= 10) {
+    textGrad.addColorStop(0, '#ffcc00');
+    textGrad.addColorStop(1, '#ffee88');
+  } else {
+    textGrad.addColorStop(0, '#ff8844');
+    textGrad.addColorStop(1, '#ffbb66');
+  }
+
+  // Text outline for readability
+  ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+  ctx.lineWidth = 2.5;
+  ctx.lineJoin = 'round';
+  ctx.strokeText(text, x - 10, y + 1);
+
+  ctx.fillStyle = textGrad;
+  ctx.fillText(text, x - 10, y + 1);
 
   ctx.restore();
 }
@@ -537,13 +611,23 @@ function drawDangerVignette(ctx: CanvasRenderingContext2D, hpRatio: number): voi
   const cw = ctx.canvas.width;
   const ch = ctx.canvas.height;
   const t = getTime();
+  const urgency = 1 - hpRatio * 3;
 
-  const pulseAlpha = (Math.sin(t * 4) * 0.1 + 0.15) * (1 - hpRatio * 3);
-  const vigGrad = ctx.createRadialGradient(cw / 2, ch / 2, ch * 0.3, cw / 2, ch / 2, ch * 0.7);
+  // Primary vignette (slower pulse)
+  const pulseAlpha = (Math.sin(t * 4) * 0.1 + 0.15) * urgency;
+  const vigGrad = ctx.createRadialGradient(cw / 2, ch / 2, ch * 0.25, cw / 2, ch / 2, ch * 0.65);
   vigGrad.addColorStop(0, 'rgba(255,0,0,0)');
+  vigGrad.addColorStop(0.7, `rgba(200,0,0,${Math.max(0, pulseAlpha * 0.3)})`);
   vigGrad.addColorStop(1, `rgba(255,0,0,${Math.max(0, pulseAlpha)})`);
   ctx.fillStyle = vigGrad;
   ctx.fillRect(0, 0, cw, ch);
+
+  // Secondary heartbeat pulse (faster, edge-focused)
+  if (hpRatio <= 0.15) {
+    const heartbeat = Math.pow(Math.sin(t * 6), 2) * 0.12;
+    ctx.fillStyle = `rgba(255,30,0,${heartbeat})`;
+    ctx.fillRect(0, 0, cw, ch);
+  }
 }
 
 // ── Synergy Indicators ──────────────────────────────────
@@ -559,23 +643,42 @@ function drawSynergyIndicators(
   ctx.font = 'bold 9px sans-serif';
 
   let y = 50;
-  const x = 8;
+  const x = 6;
+  const t = getTime();
 
   for (const [id, bonus] of synergies) {
-    // Small indicator pill
-    ctx.fillStyle = 'rgba(100,200,255,0.2)';
+    const pillW = 68;
+    const pillH = 16;
+
+    // Background pill with gradient
+    const pillGrad = ctx.createLinearGradient(x, y, x + pillW, y);
+    pillGrad.addColorStop(0, 'rgba(30,60,100,0.6)');
+    pillGrad.addColorStop(1, 'rgba(30,60,100,0.2)');
+    ctx.fillStyle = pillGrad;
     ctx.beginPath();
-    ctx.roundRect(x, y, 60, 14, 7);
+    ctx.roundRect(x, y, pillW, pillH, 8);
     ctx.fill();
 
-    ctx.fillStyle = '#88ccff';
+    // Border
+    const shimmer = Math.sin(t * 2 + y * 0.1) * 0.15 + 0.35;
+    ctx.strokeStyle = `rgba(100,200,255,${shimmer})`;
+    ctx.lineWidth = 0.8;
+    ctx.stroke();
+
+    // Synergy icon dot
+    ctx.fillStyle = '#66bbff';
+    ctx.beginPath();
+    ctx.arc(x + 8, y + pillH / 2, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#c8e6ff';
     ctx.textBaseline = 'middle';
 
     let label = id.replace(/_/g, ' ').split(' ').map(w => w[0]?.toUpperCase()).join('');
     if (bonus.damageMultiplier) label += ` +${Math.round((bonus.damageMultiplier - 1) * 100)}%`;
 
-    ctx.fillText(label, x + 5, y + 7);
-    y += 18;
+    ctx.fillText(label, x + 14, y + pillH / 2);
+    y += 20;
   }
 
   ctx.restore();
@@ -583,14 +686,13 @@ function drawSynergyIndicators(
 
 // ── Map Drawing (3D Tiles) ──────────────────────────────────
 
-export function drawMap(
+function drawMapStatic(
   ctx: CanvasRenderingContext2D,
   mapData: MapData,
   cellSize: number
 ): void {
   const grid = mapData.grid;
   const depth = cellSize * DEPTH;
-  const t = getTime();
 
   for (let row = 0; row < grid.length; row++) {
     for (let col = 0; col < grid[row].length; col++) {
@@ -637,7 +739,7 @@ export function drawMap(
           const gx = x + s1 * (cellSize - 6) + 3;
           const gy = y + s2 * (cellSize - 6) + 3;
           const bladeH = 3 + s3 * 4;
-          const sway = Math.sin(t * 1.5 + s1 * 10 + col * 0.3) * 1.5;
+          const sway = (s1 - 0.5) * 2;
           const green = Math.floor(140 + s3 * 60);
           ctx.fillStyle = `rgba(60,${green},30,${0.25 + s3 * 0.2})`;
           ctx.beginPath();
@@ -671,7 +773,7 @@ export function drawMap(
           const gx = x + s1 * (cellSize - 4) + 2;
           const gy = y + s2 * (cellSize - 4) + 2;
           const bladeH = 2 + s3 * 3;
-          const sway = Math.sin(t * 1.2 + s1 * 8 + col * 0.4) * 1;
+          const sway = (s1 - 0.5) * 1.2;
           ctx.fillStyle = `rgba(80,160,50,${0.15 + s3 * 0.1})`;
           ctx.beginPath();
           ctx.moveTo(gx - 0.8, gy);
@@ -686,7 +788,7 @@ export function drawMap(
         ctx.strokeRect(x + 1, y + 1, cellSize - 2, cellSize - 2);
       } else if (terrain === 9) {
         // Lava glow + cracks
-        const glow = Math.sin(t * 3 + col + row) * 0.2 + 0.3;
+        const glow = 0.3;
         ctx.fillStyle = `rgba(255,200,50,${glow})`;
         ctx.fillRect(x, y, cellSize, cellSize);
         ctx.strokeStyle = `rgba(255,100,0,${glow * 0.5})`;
@@ -700,7 +802,7 @@ export function drawMap(
         for (let i = 0; i < 4; i++) {
           const sx = x + seededRandom(baseSeed * 11 + i * 37) * (cellSize - 4) + 2;
           const sy = y + seededRandom(baseSeed * 7 + i * 43) * (cellSize - 4) + 2;
-          const sparkle = Math.sin(t * 4 + i * 1.7 + baseSeed * 0.01) * 0.5 + 0.5;
+          const sparkle = seededRandom(baseSeed * 17 + i * 41) * 0.5 + 0.3;
           ctx.fillStyle = `rgba(220,240,255,${sparkle * 0.5})`;
           const sr = 1.2 + sparkle * 0.8;
           ctx.beginPath();
@@ -761,7 +863,19 @@ export function drawMap(
   ctx.fillStyle = bgGrad;
   ctx.fillRect(0, 0, totalW, totalH);
 
-  // ── Ambient floating particles (pollen/dust) ──────────
+}
+
+function drawMapAnimated(
+  ctx: CanvasRenderingContext2D,
+  mapData: MapData,
+  cellSize: number
+): void {
+  const grid = mapData.grid;
+  const totalW = (grid[0]?.length ?? 0) * cellSize;
+  const totalH = grid.length * cellSize;
+  const t = getTime();
+
+  // Ambient floating particles (pollen/dust)
   const particleCount = 15;
   for (let i = 0; i < particleCount; i++) {
     const seed = i * 137.5;
@@ -771,7 +885,7 @@ export function drawMap(
     const pSize = 1.2 + Math.sin(t * 2 + i) * 0.4;
     ctx.fillStyle = `rgba(255,255,200,${pAlpha})`;
     ctx.beginPath();
-    ctx.arc(px, py, pSize, 0, Math.PI * 2);
+    ctx.arc(px | 0, py | 0, pSize, 0, Math.PI * 2);
     ctx.fill();
   }
 }
@@ -920,6 +1034,13 @@ export function drawPath(
   ctx.arc(start.x, start.y, pulseR, 0, Math.PI * 2);
   ctx.stroke();
 
+  // Energy ring (rotating)
+  ctx.strokeStyle = `rgba(68,255,68,${0.15 + Math.sin(t * 5) * 0.08})`;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.ellipse(start.x, start.y, sr * 1.6, sr * 0.6, t * 0.8, 0, Math.PI * 2);
+  ctx.stroke();
+
   // Arrow icon
   ctx.fillStyle = '#ffffff';
   ctx.font = `bold ${Math.round(sr * 0.85)}px sans-serif`;
@@ -964,6 +1085,13 @@ export function drawPath(
   ctx.arc(end.x, end.y, ePulseR, 0, Math.PI * 2);
   ctx.stroke();
 
+  // Energy ring (rotating)
+  ctx.strokeStyle = `rgba(255,68,68,${0.15 + Math.sin(t * 5 + 1) * 0.08})`;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.ellipse(end.x, end.y, er * 1.6, er * 0.6, -t * 0.8, 0, Math.PI * 2);
+  ctx.stroke();
+
   // X marker
   ctx.strokeStyle = '#ffffff';
   ctx.lineWidth = 2.5;
@@ -1004,10 +1132,17 @@ export function drawTower(
 
   ctx.save();
 
-  // Grade glow
+  // Grade glow (drawn as radial gradient to avoid expensive shadowBlur)
   if (tower.grade >= 2) {
-    ctx.shadowColor = GRADE_GLOW[tower.grade];
-    ctx.shadowBlur = 8 + tower.grade * 5;
+    const gradeGlowColor = GRADE_GLOW[tower.grade];
+    const glowSize = (8 + tower.grade * 5) * 0.8;
+    const gradeGlow = ctx.createRadialGradient(center.x, center.y, size * 0.3, center.x, center.y, size + glowSize);
+    gradeGlow.addColorStop(0, gradeGlowColor);
+    gradeGlow.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = gradeGlow;
+    ctx.beginPath();
+    ctx.arc(center.x, center.y, size + glowSize, 0, Math.PI * 2);
+    ctx.fill();
   }
 
   // Range circle when selected
@@ -1042,9 +1177,7 @@ export function drawTower(
   ctx.stroke();
   ctx.globalAlpha = 1;
 
-  // Reset shadow for drawing
-  ctx.shadowColor = 'transparent';
-  ctx.shadowBlur = 0;
+  // Reset shadow for drawing (no-op since we use gradient glow now)
 
   // Draw tower by type
   switch (tower.type) {
@@ -2265,8 +2398,8 @@ export function drawEnemy(
   const bounceY = Math.sin(t * 8 + enemy.pathProgress * 50) * speedFactor;
   const squashX = 1 + Math.sin(t * 8 + enemy.pathProgress * 50 + Math.PI / 2) * 0.03;
   const squashY = 1 - Math.sin(t * 8 + enemy.pathProgress * 50 + Math.PI / 2) * 0.03;
-  const x = rawX;
-  const y = rawY + bounceY;
+  const x = rawX | 0;
+  const y = (rawY + bounceY) | 0;
 
   // ── Status effect body tint ────────────────────────────
   const hasFreeze = enemy.effects.some(e => e.type === 'freeze' || e.type === 'slow');
@@ -2935,16 +3068,12 @@ export function drawEnemy(
     ctx.bezierCurveTo(x + size * 0.5, y - size * 1.1, x + size * 0.65, y - size * 0.8, x + size * 0.55, y - size * 0.55);
     ctx.stroke();
 
-    // Glowing eyes with shadowBlur
-    ctx.save();
-    ctx.shadowColor = '#ff3300';
-    ctx.shadowBlur = 8;
+    // Glowing eyes
     ctx.fillStyle = '#ff4400';
     ctx.beginPath();
     ctx.ellipse(x - size * 0.15, y - size * 0.52, size * 0.08, size * 0.05, 0, 0, Math.PI * 2);
     ctx.ellipse(x + size * 0.15, y - size * 0.52, size * 0.08, size * 0.05, 0, 0, Math.PI * 2);
     ctx.fill();
-    ctx.restore();
 
   } else if (enemy.type === 'HYDRA') {
     // ── HYDRA (boss): Three-headed serpent ──
@@ -3066,16 +3195,12 @@ export function drawEnemy(
       ctx.fillText(letters[i], lx, ly);
     }
 
-    // Two bright glowing eye dots
-    ctx.save();
-    ctx.shadowColor = '#ffffff';
-    ctx.shadowBlur = 10;
+    // Two bright eye dots
     ctx.fillStyle = '#ffffff';
     ctx.beginPath();
     ctx.arc(x - size * 0.18, y - size * 0.08, size * 0.07, 0, Math.PI * 2);
     ctx.arc(x + size * 0.18, y - size * 0.08, size * 0.07, 0, Math.PI * 2);
     ctx.fill();
-    ctx.restore();
 
   } else {
     // ── Fallback: generic 3D sphere ──
@@ -3260,6 +3385,13 @@ export function drawEnemy(
     shineGrad.addColorStop(1, 'rgba(0,0,0,0.1)');
     ctx.fillStyle = shineGrad;
     ctx.fillRect(x - barWidth / 2, barY, barWidth * hpRatio, barHeight);
+
+    // Pulse effect on critically low HP
+    if (hpRatio <= 0.2 && hpRatio > 0) {
+      const critPulse = Math.sin(_time * 8) * 0.15 + 0.15;
+      ctx.fillStyle = `rgba(255,50,50,${critPulse})`;
+      ctx.fillRect(x - barWidth / 2, barY, barWidth * hpRatio, barHeight);
+    }
   }
 
   const shieldRatio = (enemy.shield ?? 0) / Math.max(1, enemy.shieldMax ?? enemy.maxHp);
@@ -3309,6 +3441,20 @@ export function drawEnemy(
 
   // Status effects
   drawStatusEffects(ctx, enemy, x, y + size + 10, size);
+
+  // ── Hit Flash (white overlay on recent damage) ───────────
+  if (enemy.lastHitTime !== undefined) {
+    const hitAge = _time - enemy.lastHitTime;
+    if (hitAge >= 0 && hitAge < 0.1) {
+      const flashAlpha = (1 - hitAge / 0.1) * 0.55;
+      ctx.globalAlpha = flashAlpha;
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(x, y, size * (isBoss ? 1.0 : 0.9), 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+  }
 
   ctx.restore();
 }
@@ -3458,8 +3604,6 @@ export function drawProjectile(ctx: CanvasRenderingContext2D, proj: Projectile):
     }
     case 'MAGIC': {
       // Outer energy field
-      ctx.shadowColor = '#cc66ff';
-      ctx.shadowBlur = 18;
       const outerGrad = ctx.createRadialGradient(x, y, 4, x, y, 14);
       outerGrad.addColorStop(0, 'rgba(200,100,255,0.3)');
       outerGrad.addColorStop(0.5, 'rgba(153,68,221,0.12)');
@@ -3517,7 +3661,6 @@ export function drawProjectile(ctx: CanvasRenderingContext2D, proj: Projectile):
         ctx.arc(x + Math.cos(angle) * dist, y + Math.sin(angle) * dist, 1.5, 0, Math.PI * 2);
         ctx.fill();
       }
-      ctx.shadowBlur = 0;
       break;
     }
     case 'CANNON': {
@@ -3545,9 +3688,6 @@ export function drawProjectile(ctx: CanvasRenderingContext2D, proj: Projectile):
         ctx.fill();
       }
       // Metal cannonball (bigger, more metallic)
-      ctx.shadowColor = 'rgba(0,0,0,0.5)';
-      ctx.shadowBlur = 4;
-      ctx.shadowOffsetY = 2;
       const grad = ctx.createRadialGradient(x - 2.5, y - 2.5, 0, x, y, 7);
       grad.addColorStop(0, '#cccccc');
       grad.addColorStop(0.3, '#999999');
@@ -3557,8 +3697,6 @@ export function drawProjectile(ctx: CanvasRenderingContext2D, proj: Projectile):
       ctx.beginPath();
       ctx.arc(x, y, 7, 0, Math.PI * 2);
       ctx.fill();
-      ctx.shadowBlur = 0;
-      ctx.shadowOffsetY = 0;
       // Metal rim reflection
       ctx.strokeStyle = 'rgba(255,255,255,0.12)';
       ctx.lineWidth = 0.8;
@@ -3579,8 +3717,6 @@ export function drawProjectile(ctx: CanvasRenderingContext2D, proj: Projectile):
     }
     case 'ICE': {
       // Frost aura field
-      ctx.shadowColor = '#44ddee';
-      ctx.shadowBlur = 16;
       const auraGrad = ctx.createRadialGradient(x, y, 3, x, y, 16);
       auraGrad.addColorStop(0, 'rgba(150,230,255,0.2)');
       auraGrad.addColorStop(0.5, 'rgba(100,200,240,0.08)');
@@ -3636,13 +3772,10 @@ export function drawProjectile(ctx: CanvasRenderingContext2D, proj: Projectile):
           ctx.stroke();
         }
       }
-      ctx.shadowBlur = 0;
       break;
     }
     case 'POISON': {
       // Toxic mist aura
-      ctx.shadowColor = '#44cc44';
-      ctx.shadowBlur = 14;
       const mistGrad = ctx.createRadialGradient(x, y, 2, x, y, 12);
       mistGrad.addColorStop(0, 'rgba(100,255,100,0.15)');
       mistGrad.addColorStop(0.6, 'rgba(68,200,68,0.06)');
@@ -3687,13 +3820,10 @@ export function drawProjectile(ctx: CanvasRenderingContext2D, proj: Projectile):
           ctx.fill();
         }
       }
-      ctx.shadowBlur = 0;
       break;
     }
     case 'LIGHTNING': {
       // Electric field aura
-      ctx.shadowColor = '#ffee44';
-      ctx.shadowBlur = 22;
       const fieldGrad = ctx.createRadialGradient(x, y, 2, x, y, 18);
       fieldGrad.addColorStop(0, 'rgba(255,255,200,0.25)');
       fieldGrad.addColorStop(0.4, 'rgba(255,255,100,0.08)');
@@ -3751,7 +3881,6 @@ export function drawProjectile(ctx: CanvasRenderingContext2D, proj: Projectile):
         ctx.arc(sx, sy, 1.2, 0, Math.PI * 2);
         ctx.fill();
       }
-      ctx.shadowBlur = 0;
       break;
     }
     case 'SNIPER': {
@@ -3779,8 +3908,6 @@ export function drawProjectile(ctx: CanvasRenderingContext2D, proj: Projectile):
       ctx.lineTo(x, y);
       ctx.stroke();
       // Bullet core (elongated, bright)
-      ctx.shadowColor = '#ff4444';
-      ctx.shadowBlur = 8;
       const bGrad = ctx.createLinearGradient(x - 5, y - 2, x + 5, y + 2);
       bGrad.addColorStop(0, 'rgba(255,200,150,0)');
       bGrad.addColorStop(0.3, '#ffeecc');
@@ -3799,13 +3926,10 @@ export function drawProjectile(ctx: CanvasRenderingContext2D, proj: Projectile):
       ctx.beginPath();
       ctx.arc(x + 3, y, 3, 0, Math.PI * 2);
       ctx.fill();
-      ctx.shadowBlur = 0;
       break;
     }
     case 'FLAME': {
       // Heat distortion aura
-      ctx.shadowColor = '#ff6600';
-      ctx.shadowBlur = 16;
       const heatGrad = ctx.createRadialGradient(x, y, 4, x, y, 18);
       heatGrad.addColorStop(0, 'rgba(255,150,50,0.15)');
       heatGrad.addColorStop(0.5, 'rgba(255,80,20,0.05)');
@@ -3851,15 +3975,12 @@ export function drawProjectile(ctx: CanvasRenderingContext2D, proj: Projectile):
         ctx.arc(ex, ey, er, 0, Math.PI * 2);
         ctx.fill();
       }
-      ctx.shadowBlur = 0;
       break;
     }
     case 'WORD': {
       const time = pt;
       const hue = (time * 60) % 360;
       // Rainbow aura
-      ctx.shadowColor = `hsl(${hue}, 80%, 60%)`;
-      ctx.shadowBlur = 18;
       const aura = ctx.createRadialGradient(x, y, 3, x, y, 14);
       aura.addColorStop(0, `hsla(${hue}, 90%, 70%, 0.25)`);
       aura.addColorStop(0.5, `hsla(${(hue + 60) % 360}, 80%, 60%, 0.08)`);
@@ -3898,7 +4019,6 @@ export function drawProjectile(ctx: CanvasRenderingContext2D, proj: Projectile):
         ctx.arc(x - i * 4.5, ty, 3.5 / i, 0, Math.PI * 2);
         ctx.fill();
       }
-      ctx.shadowBlur = 0;
       break;
     }
     default: {
@@ -4354,7 +4474,7 @@ export function drawDamageTexts(ctx: CanvasRenderingContext2D, texts: DamageText
     if (alpha <= 0) continue;
     ctx.globalAlpha = alpha;
 
-    const fontSize = text.isCrit ? 18 : 13;
+    const fontSize = text.isCrit ? 20 : 14;
     ctx.font = `bold ${Math.round(fontSize * scale)}px sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -4465,6 +4585,34 @@ export function drawUIOverlay(ctx: CanvasRenderingContext2D, engine: GameEngine)
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(waveText, cw / 2, pillY + pillH / 2);
+
+  // Wave progress bar
+  const waveCount = engine.getWaveCount();
+  if (waveCount > 0) {
+    const barW = pillW - 10;
+    const barH = 3;
+    const barX = cw / 2 - barW / 2;
+    const barY2 = pillY + pillH - 4;
+    const waveProgress = (currentWave + 1) / waveCount;
+
+    ctx.fillStyle = 'rgba(0,0,0,0.4)';
+    ctx.fillRect(barX, barY2, barW, barH);
+
+    const progGrad = ctx.createLinearGradient(barX, 0, barX + barW * waveProgress, 0);
+    progGrad.addColorStop(0, '#4488ff');
+    progGrad.addColorStop(1, '#88ccff');
+    ctx.fillStyle = progGrad;
+    ctx.fillRect(barX, barY2, barW * waveProgress, barH);
+
+    // Boss wave markers
+    for (let w = 0; w < waveCount; w++) {
+      if ((w + 1) % 5 === 0) {
+        const mx = barX + (w / waveCount) * barW;
+        ctx.fillStyle = w <= currentWave ? 'rgba(255,100,100,0.8)' : 'rgba(255,100,100,0.3)';
+        ctx.fillRect(mx - 0.5, barY2 - 1, 1, barH + 2);
+      }
+    }
+  }
 
   const waveModifier = engine.getCurrentWaveModifier();
   if (waveModifier) {
